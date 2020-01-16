@@ -1,0 +1,17 @@
+version: '3.6'
+
+volumes:
+  animedb:
+    driver: local
+
+services:
+  animedb:
+    image: postgres
+    environment:
+      POSTGRES_USER: anime_user
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: animedb
+    volumes:
+      - animedb:/var/lib/postgresql/data
+    ports:
+      - 5432:5432

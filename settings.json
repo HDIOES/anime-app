@@ -1,0 +1,8 @@
+{
+    "databaseUrl": "postgres://anime_user:12345@localhost:5432/animedb?sslmode=disable",
+    "maxOpenConnections": 15,
+    "maxIdleConnections": 5,
+    "connectionTimeout": 60,
+    "port": 8000,
+    "migrationPath": "migrations"
+}
