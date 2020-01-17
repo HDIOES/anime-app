@@ -2,6 +2,29 @@
 
 
 [[projects]]
+  digest = "1:9ff22c26414baf7deaf74f2a788fe7b97666048bcbe346c52cfe823442abbdfb"
+  name = "github.com/lib/pq"
+  packages = [
+    ".",
+    "oid",
+    "scram",
+  ]
+  pruneopts = "UT"
+  revision = "99274577be97ac9b1d95a2d61d566dc9b7cc6a54"
+  version = "v1.3.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:7b5dd0298cd36433145971da62f08b97404c8c0b0a444bbc936f1365e7bc531f"
+  name = "github.com/rubenv/sql-migrate"
+  packages = [
+    ".",
+    "sqlparse",
+  ]
+  pruneopts = "UT"
+  revision = "06338513c2375c000ad94f050dce5ee2a5bdcdc6"
+
+[[projects]]
   digest = "1:297db10f51274a55b99badf430924b440c7285bda8273761321353e60d41e254"
   name = "go.uber.org/dig"
   packages = [
@@ -37,9 +60,21 @@
   pruneopts = "UT"
   revision = "831fdb1e186882bbedf9151908fa813db5682da3"
 
+[[projects]]
+  digest = "1:1b36b0cb56126316f637ad55cfd5ed84c945fe45bd90e944666b4107a80a1da9"
+  name = "gopkg.in/gorp.v1"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "6a667da9c028871f98598d85413e3fc4c6daa52e"
+  version = "v1.7.2"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  input-imports = ["go.uber.org/dig"]
+  input-imports = [
+    "github.com/lib/pq",
+    "github.com/rubenv/sql-migrate",
+    "go.uber.org/dig",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1
