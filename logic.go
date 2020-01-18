@@ -81,8 +81,9 @@ func (th *TelegramHandler) startCommand(update *Update) error {
 		return insertErr
 	}
 	notification := Notification{
-		Type: startCommand,
-		Text: welcomeText,
+		TelegramID: update.Message.From.ID,
+		Type:       startCommand,
+		Text:       welcomeText,
 	}
 	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
 		return sendNotificationErr
@@ -97,9 +98,10 @@ func (th *TelegramHandler) animesCommand(update *Update) error {
 		return animeErr
 	}
 	notification := Notification{
-		Type:   animesCommand,
-		Text:   animesText,
-		Animes: animes,
+		TelegramID: update.Message.From.ID,
+		Type:       animesCommand,
+		Text:       animesText,
+		Animes:     animes,
 	}
 	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
 		return sendNotificationErr
@@ -114,9 +116,10 @@ func (th *TelegramHandler) subscriptionsCommand(update *Update) error {
 		return animeErr
 	}
 	notification := Notification{
-		Type:   subscriptionsCommand,
-		Text:   subscriptionsText,
-		Animes: animes,
+		TelegramID: update.Message.From.ID,
+		Type:       subscriptionsCommand,
+		Text:       subscriptionsText,
+		Animes:     animes,
 	}
 	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
 		return sendNotificationErr
@@ -154,8 +157,9 @@ func (th *TelegramHandler) defaultCommand(update *Update) error {
 		notificationText += "добавлена"
 	}
 	notification := Notification{
-		Type: defaultCommand,
-		Text: notificationText,
+		TelegramID: update.Message.From.ID,
+		Type:       defaultCommand,
+		Text:       notificationText,
 	}
 	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
 		return sendNotificationErr
@@ -188,6 +192,7 @@ type User struct {
 
 //Notification struct
 type Notification struct {
+	TelegramID int64          `json:"telegramId"`
 	Type       string         `json:"type"`
 	Text       string         `json:"text"`
 	Animes     []dao.AnimeDTO `json:"animes"`
