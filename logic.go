@@ -37,18 +37,30 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	update := &Update{}
 	decodeErr := decoder.Decode(update)
 	if decodeErr != nil {
-		//return 400 status
+		th.setStatus(w, 400)
 	}
 	switch update.Message.Text {
 	case "/start":
-		th.startCommand(update)
+		if err := th.startCommand(update); err != nil {
+			th.setStatus(w, 400)
+		}
 	case "/animes":
-		th.animesCommand(update)
+		if err := th.animesCommand(update); err != nil {
+			th.setStatus(w, 400)
+		}
 	case "/subscriptions":
-		th.subscriptionsCommand(update)
+		if err := th.subscriptionsCommand(update); err != nil {
+			th.setStatus(w, 400)
+		}
 	default:
-		th.defaultCommand(update)
+		if err := th.defaultCommand(update); err != nil {
+			th.setStatus(w, 400)
+		}
 	}
+}
+
+func (th *TelegramHandler) setStatus(w http.ResponseWriter, httpStatus int) {
+	w.WriteHeader(httpStatus)
 }
 
 func (th *TelegramHandler) sendNotification(notification Notification) error {
