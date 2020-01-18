@@ -188,7 +188,8 @@ type User struct {
 
 //Notification struct
 type Notification struct {
-	Type   string         `json:"type"`
-	Text   string         `json:"text"`
-	Animes []dao.AnimeDTO `json:"animes"`
+	Type       string         `json:"type"`
+	Text       string         `json:"text"`
+	Animes     []dao.AnimeDTO `json:"animes"`
+	WebhookURL string         `json:"webhookUrl"`
 }

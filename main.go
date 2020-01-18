@@ -59,14 +59,22 @@ func main() {
 		return db, natsConnection, &dao.AnimeDAO{Db: db}, &dao.UserDAO{Db: db}, &dao.SubscriptionDAO{Db: db}
 	})
 	container.Invoke(func(db *sql.DB, settings *Settings, natsConnection *nats.Conn, adao *dao.AnimeDAO, udao *dao.UserDAO, sdao *dao.SubscriptionDAO) {
-		srv := &http.Server{Addr: ":8000", Handler: &TelegramHandler{
+		handler := &TelegramHandler{
 			db:             db,
 			udao:           udao,
 			sdao:           sdao,
 			adao:           adao,
 			natsConnection: natsConnection,
 			settings:       settings,
-		}}
+		}
+		notification := Notification{
+			Type:       "setWebhookNotification",
+			WebhookURL: settings.TelegramWebhookURL,
+		}
+		if err := handler.sendNotification(notification); err != nil {
+			panic(err)
+		}
+		srv := &http.Server{Addr: ":8000", Handler: handler}
 		log.Fatal(srv.ListenAndServe())
 	})
 }
@@ -81,4 +89,5 @@ type Settings struct {
 	MigrationPath      string `json:"migrationPath"`
 	NatsURL            string `json:"natsUrl"`
 	NatsSubject        string `json:"natsSubject"`
+	TelegramWebhookURL string `json:"telegramWebhookUrl"`
 }
