@@ -13,20 +13,48 @@ type AnimeDAO struct {
 
 //AnimeDTO struct
 type AnimeDTO struct {
-	id            int64
-	externalID    string
-	rusName       string
-	engName       string
-	imageURL      string
-	nextEpisodeAt time.Time
+	ID            int64
+	ExternalID    string
+	RusName       string
+	EngName       string
+	ImageURL      string
+	NextEpisodeAt time.Time
 }
 
-const userAnimesSQL = "SELECT (ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT) FROM TELEGRAM_USERS TU" +
-	" JOIN SUBCRIPTIONS SS ON (TU.USERNAME = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
-	" JOIN ANIMES ANS ON (ANS.ID = SS.ANIME_ID)"
+const (
+	userAnimesSQL = "SELECT (ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT) FROM TELEGRAM_USERS TU" +
+		" JOIN SUBCRIPTIONS SS ON (TU.USERNAME = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
+		" JOIN ANIMES ANS ON (ANS.ID = SS.ANIME_ID)"
 
-const notUserAnimesSQL = "SELECT (ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT) FROM ANIMES" +
-	" EXCEPT " + userAnimesSQL
+	notUserAnimesSQL = "SELECT (ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT) FROM ANIMES" +
+		" EXCEPT " + userAnimesSQL
+
+	findAnimeSQL        = "SELECT (ID, EXTERNALID, RUSNAME, ENGNAME, IMAGEURL, NEXT_EPISODE_AT) FROM ANIMES WHERE ENGNAME = $1"
+	findUserSQL         = "SELECT (ID, TELEGRAM_USER_ID, TELEGRAM_USERNAME) FROM TELEGRAM_USERS WHERE TELEGRAM_USER_ID = $1"
+	findSubscriptionSQL = "SELECT (TELEGRAM_USER_ID, ANIME_ID) FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2"
+)
+
+//Find func
+func (adao *AnimeDAO) Find(engname string) (*AnimeDTO, error) {
+	sqlStatement, stmtErr := adao.Db.Prepare(findAnimeSQL)
+	if stmtErr != nil {
+		return nil, stmtErr
+	}
+	defer sqlStatement.Close()
+	result, resErr := sqlStatement.Query(engname)
+	if resErr != nil {
+		return nil, resErr
+	}
+	defer result.Close()
+	if result.Next() {
+		animeDTO, scanErr := adao.scanAsAnime(result)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		return animeDTO, nil
+	}
+	return nil, nil
+}
 
 //ReadNotUserAnimes func
 func (adao *AnimeDAO) ReadNotUserAnimes(externalID string) ([]AnimeDTO, error) {
@@ -36,6 +64,43 @@ func (adao *AnimeDAO) ReadNotUserAnimes(externalID string) ([]AnimeDTO, error) {
 //ReadUserAnimes func
 func (adao *AnimeDAO) ReadUserAnimes(externalID string) ([]AnimeDTO, error) {
 	return adao.readAnimesBySQL(externalID, userAnimesSQL)
+}
+
+func (adao *AnimeDAO) scanAsAnime(result *sql.Rows) (*AnimeDTO, error) {
+	var ID *sql.NullInt64
+	var externalID *sql.NullString
+	var rusname *sql.NullString
+	var engname *sql.NullString
+	var imageURL *sql.NullString
+	var nextEpisodeAt *sql.NullString
+	scanErr := result.Scan(&ID, &externalID, &rusname, &engname, &imageURL, &nextEpisodeAt)
+	if scanErr != nil {
+		return nil, scanErr
+	}
+	animeDTO := AnimeDTO{}
+	if ID.Valid {
+		animeDTO.ID = ID.Int64
+	}
+	if externalID.Valid {
+		animeDTO.ExternalID = externalID.String
+	}
+	if rusname.Valid {
+		animeDTO.RusName = rusname.String
+	}
+	if engname.Valid {
+		animeDTO.EngName = engname.String
+	}
+	if imageURL.Valid {
+		animeDTO.ImageURL = imageURL.String
+	}
+	if nextEpisodeAt.Valid {
+		if time, parseErr := time.ParseInLocation("2016-06-22 19:10:25-07", nextEpisodeAt.String, time.Local); parseErr != nil {
+			log.Println(parseErr)
+		} else {
+			animeDTO.NextEpisodeAt = time
+		}
+	}
+	return &animeDTO, nil
 }
 
 func (adao *AnimeDAO) readAnimesBySQL(externalID string, sqlStr string) ([]AnimeDTO, error) {
@@ -50,40 +115,12 @@ func (adao *AnimeDAO) readAnimesBySQL(externalID string, sqlStr string) ([]Anime
 	}
 	userAnimes := make([]AnimeDTO, 0, 10)
 	for result.Next() {
-		var ID *sql.NullInt64
-		var externalID *sql.NullString
-		var rusname *sql.NullString
-		var engname *sql.NullString
-		var imageURL *sql.NullString
-		var nextEpisodeAt *sql.NullString
-		scanErr := result.Scan(&ID, &externalID, &rusname, &engname, &imageURL, &nextEpisodeAt)
+		animeDTO, scanErr := adao.scanAsAnime(result)
 		if scanErr != nil {
 			result.Close()
 			return nil, scanErr
 		}
-		animeDTO := AnimeDTO{}
-		if ID.Valid {
-			animeDTO.id = ID.Int64
-		}
-		if externalID.Valid {
-			animeDTO.externalID = externalID.String
-		}
-		if rusname.Valid {
-			animeDTO.rusName = rusname.String
-		}
-		if engname.Valid {
-			animeDTO.engName = engname.String
-		}
-		if imageURL.Valid {
-			animeDTO.imageURL = imageURL.String
-		}
-		if nextEpisodeAt.Valid {
-			if time, parseErr := time.ParseInLocation("2016-06-22 19:10:25-07", nextEpisodeAt.String, time.Local); parseErr != nil {
-				log.Println(parseErr)
-			} else {
-				animeDTO.nextEpisodeAt = time
-			}
-		}
+		userAnimes = append(userAnimes, *animeDTO)
 	}
 	return userAnimes, nil
 }
@@ -95,13 +132,70 @@ type UserDAO struct {
 
 //UserDTO struct
 type UserDTO struct {
-	id               int64
-	externalID       string
-	telegramUsername string
+	ID               int64
+	ExternalID       string
+	TelegramUsername string
+}
+
+//Find func
+func (udao *UserDAO) Find(telegramID string) (*UserDTO, error) {
+	sqlStatement, stmtErr := udao.Db.Prepare(findUserSQL)
+	if stmtErr != nil {
+		return nil, stmtErr
+	}
+	defer sqlStatement.Close()
+	result, resErr := sqlStatement.Query(telegramID)
+	if resErr != nil {
+		return nil, resErr
+	}
+	defer result.Close()
+	if result.Next() {
+		userDTO, scanErr := udao.scanAsUser(result)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		return userDTO, nil
+	}
+	return nil, nil
+}
+
+func (udao *UserDAO) scanAsUser(result *sql.Rows) (*UserDTO, error) {
+	var id *sql.NullInt64
+	var telegramID *sql.NullString
+	var telegramUsername *sql.NullString
+	scanErr := result.Scan(&id, &telegramID, &telegramUsername)
+	userDTO := UserDTO{}
+	if id.Valid {
+		userDTO.ID = id.Int64
+	}
+	if telegramID.Valid {
+		userDTO.ExternalID = telegramID.String
+	}
+	if scanErr != nil {
+		return nil, scanErr
+	}
+	return &userDTO, nil
 }
 
 //Insert func
-func (udao *UserDAO) Insert(tx *sql.Tx, externalID string, username string) error {
+func (udao *UserDAO) Insert(externalID string, username string) error {
+	tx, txErr := udao.Db.Begin()
+	if txErr != nil {
+		return txErr
+	}
+	if insertErr := udao.insert(tx, externalID, username); insertErr != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return rollbackErr
+		}
+		return insertErr
+	}
+	if commitErr := tx.Commit(); commitErr != nil {
+		return commitErr
+	}
+	return nil
+}
+
+func (udao *UserDAO) insert(tx *sql.Tx, externalID string, username string) error {
 	sqlStatement, stmtErr := tx.Prepare("INSERT INTO TELEGRAM_USERS (TELEGRAM_USER_ID, TELEGRAM_USERNAME) ($1, $2)")
 	if stmtErr != nil {
 		return stmtErr
@@ -126,7 +220,24 @@ type SubcriptionDTO struct {
 }
 
 //Insert func
-func (sdao *SubscriptionDAO) Insert(tx *sql.Tx, userID int64, animeID int64) error {
+func (sdao *SubscriptionDAO) Insert(userID int64, animeID int64) error {
+	tx, txErr := sdao.Db.Begin()
+	if txErr != nil {
+		return txErr
+	}
+	if insertErr := sdao.insert(tx, userID, animeID); insertErr != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return rollbackErr
+		}
+		return insertErr
+	}
+	if commitErr := tx.Commit(); commitErr != nil {
+		return commitErr
+	}
+	return nil
+}
+
+func (sdao *SubscriptionDAO) insert(tx *sql.Tx, userID int64, animeID int64) error {
 	sqlStatement, stmtErr := tx.Prepare("INSERT INTO SUBSCRIPTIONS (TELEGRAM_USER_ID, ANIME_ID) ($1, $2)")
 	if stmtErr != nil {
 		return stmtErr
@@ -139,8 +250,40 @@ func (sdao *SubscriptionDAO) Insert(tx *sql.Tx, userID int64, animeID int64) err
 	return nil
 }
 
+//Find func
+func (sdao *SubscriptionDAO) Find(userID int64, animeID int64) (bool, error) {
+	sqlStatement, stmtErr := sdao.Db.Prepare(findSubscriptionSQL)
+	if stmtErr != nil {
+		return false, stmtErr
+	}
+	defer sqlStatement.Close()
+	result, resErr := sqlStatement.Query(userID, animeID)
+	if resErr != nil {
+		return false, resErr
+	}
+	defer result.Close()
+	return result.Next(), nil
+}
+
 //Delete func
-func (sdao *SubscriptionDAO) Delete(tx *sql.Tx, userID int64, animeID int64) error {
+func (sdao *SubscriptionDAO) Delete(userID int64, animeID int64) error {
+	tx, txErr := sdao.Db.Begin()
+	if txErr != nil {
+		return txErr
+	}
+	if insertErr := sdao.delete(tx, userID, animeID); insertErr != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return rollbackErr
+		}
+		return insertErr
+	}
+	if commitErr := tx.Commit(); commitErr != nil {
+		return commitErr
+	}
+	return nil
+}
+
+func (sdao *SubscriptionDAO) delete(tx *sql.Tx, userID int64, animeID int64) error {
 	sqlStatement, stmtErr := tx.Prepare("DELETE FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2")
 	if stmtErr != nil {
 		return stmtErr

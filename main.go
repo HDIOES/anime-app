@@ -11,6 +11,7 @@ import (
 
 	"github.com/HDIOES/anime-app/dao"
 	_ "github.com/lib/pq"
+	nats "github.com/nats-io/nats.go"
 	migrate "github.com/rubenv/sql-migrate"
 	"go.uber.org/dig"
 )
@@ -31,7 +32,7 @@ func main() {
 			}
 		}
 	})
-	container.Provide(func(settings *Settings) (*dao.AnimeDAO, *dao.UserDAO, *dao.SubscriptionDAO) {
+	container.Provide(func(settings *Settings) (*sql.DB, *nats.Conn, *dao.AnimeDAO, *dao.UserDAO, *dao.SubscriptionDAO) {
 		db, err := sql.Open("postgres", settings.DatabaseURL)
 		if err != nil {
 			panic(err)
@@ -51,13 +52,20 @@ func main() {
 		} else {
 			log.Printf("Applied %d migrations!\n", n)
 		}
-		return &dao.AnimeDAO{Db: db}, &dao.UserDAO{Db: db}, &dao.SubscriptionDAO{Db: db}
+		natsConnection, ncErr := nats.Connect(settings.NatsURL)
+		if ncErr != nil {
+			panic(ncErr)
+		}
+		return db, natsConnection, &dao.AnimeDAO{Db: db}, &dao.UserDAO{Db: db}, &dao.SubscriptionDAO{Db: db}
 	})
-	container.Invoke(func(adao *dao.AnimeDAO, udao *dao.UserDAO, sdao *dao.SubscriptionDAO) {
+	container.Invoke(func(db *sql.DB, settings *Settings, natsConnection *nats.Conn, adao *dao.AnimeDAO, udao *dao.UserDAO, sdao *dao.SubscriptionDAO) {
 		srv := &http.Server{Addr: ":8000", Handler: &TelegramHandler{
-			udao: udao,
-			sdao: sdao,
-			adao: adao,
+			db:             db,
+			udao:           udao,
+			sdao:           sdao,
+			adao:           adao,
+			natsConnection: natsConnection,
+			settings:       settings,
 		}}
 		log.Fatal(srv.ListenAndServe())
 	})
@@ -71,4 +79,6 @@ type Settings struct {
 	ConnectionTimeout  int    `json:"connectionTimeout"`
 	ApplicationPort    int    `json:"port"`
 	MigrationPath      string `json:"migrationPath"`
+	NatsURL            string `json:"natsUrl"`
+	NatsSubject        string `json:"natsSubject"`
 }

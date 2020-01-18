@@ -4,5 +4,7 @@
     "maxIdleConnections": 5,
     "connectionTimeout": 60,
     "port": 8000,
-    "migrationPath": "migrations"
+    "migrationPath": "migrations",
+    "natsUrl": "nats://127.0.0.1:4222",
+    "natsSubject": "notifications"
 }
