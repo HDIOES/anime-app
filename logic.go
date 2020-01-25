@@ -169,7 +169,7 @@ func (th *TelegramHandler) defaultCommand(update *Update) error {
 
 //Update struct
 type Update struct {
-	UpdateID int64   `json:"udpate_id"`
+	UpdateID int64   `json:"update_id"`
 	Message  Message `json:"message"`
 }
 

@@ -11,6 +11,7 @@ services:
       POSTGRES_USER: anime_user
       POSTGRES_PASSWORD: 12345
       POSTGRES_DB: animedb
+      TZ: GMT-3
     volumes:
       - animedb:/var/lib/postgresql/data
     ports:

@@ -2,7 +2,6 @@ package dao
 
 import (
 	sql "database/sql"
-	"log"
 	"time"
 )
 
@@ -13,25 +12,26 @@ type AnimeDAO struct {
 
 //AnimeDTO struct
 type AnimeDTO struct {
-	ID            int64
-	ExternalID    string
-	RusName       string
-	EngName       string
-	ImageURL      string
-	NextEpisodeAt time.Time
+	ID               int64
+	ExternalID       string
+	RusName          string
+	EngName          string
+	ImageURL         string
+	NextEpisodeAt    time.Time
+	NotificationSent bool
 }
 
 const (
-	userAnimesSQL = "SELECT (ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT) FROM TELEGRAM_USERS TU" +
-		" JOIN SUBCRIPTIONS SS ON (TU.USERNAME = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
-		" JOIN ANIMES ANS ON (ANS.ID = SS.ANIME_ID)"
+	userAnimesSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT FROM TELEGRAM_USERS AS TU" +
+		" JOIN SUBSCRIPTIONS AS SS ON (TU.TELEGRAM_USER_ID = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
+		" JOIN ANIMES AS ANS ON (ANS.ID = SS.ANIME_ID)"
 
-	notUserAnimesSQL = "SELECT (ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT) FROM ANIMES" +
+	notUserAnimesSQL = "SELECT ID, EXTERNALID, RUSNAME, ENGNAME, IMAGEURL, NEXT_EPISODE_AT, NOTIFICATION_SENT FROM ANIMES" +
 		" EXCEPT " + userAnimesSQL
 
-	findAnimeSQL        = "SELECT (ID, EXTERNALID, RUSNAME, ENGNAME, IMAGEURL, NEXT_EPISODE_AT) FROM ANIMES WHERE ENGNAME = $1"
-	findUserSQL         = "SELECT (ID, TELEGRAM_USER_ID, TELEGRAM_USERNAME) FROM TELEGRAM_USERS WHERE TELEGRAM_USER_ID = $1"
-	findSubscriptionSQL = "SELECT (TELEGRAM_USER_ID, ANIME_ID) FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2"
+	findAnimeSQL        = "SELECT ID, EXTERNALID, RUSNAME, ENGNAME, IMAGEURL, NEXT_EPISODE_AT, NOTIFICATION_SENT FROM ANIMES WHERE ENGNAME = $1"
+	findUserSQL         = "SELECT ID, TELEGRAM_USER_ID, TELEGRAM_USERNAME FROM TELEGRAM_USERS WHERE TELEGRAM_USER_ID = $1"
+	findSubscriptionSQL = "SELECT TELEGRAM_USER_ID, ANIME_ID FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2"
 )
 
 //Find func
@@ -72,8 +72,9 @@ func (adao *AnimeDAO) scanAsAnime(result *sql.Rows) (*AnimeDTO, error) {
 	var rusname *sql.NullString
 	var engname *sql.NullString
 	var imageURL *sql.NullString
-	var nextEpisodeAt *sql.NullString
-	scanErr := result.Scan(&ID, &externalID, &rusname, &engname, &imageURL, &nextEpisodeAt)
+	var nextEpisodeAt *PqTime
+	var notificationSent *sql.NullBool
+	scanErr := result.Scan(&ID, &externalID, &rusname, &engname, &imageURL, &nextEpisodeAt, &notificationSent)
 	if scanErr != nil {
 		return nil, scanErr
 	}
@@ -94,11 +95,10 @@ func (adao *AnimeDAO) scanAsAnime(result *sql.Rows) (*AnimeDTO, error) {
 		animeDTO.ImageURL = imageURL.String
 	}
 	if nextEpisodeAt.Valid {
-		if time, parseErr := time.ParseInLocation("2016-06-22 19:10:25-07", nextEpisodeAt.String, time.Local); parseErr != nil {
-			log.Println(parseErr)
-		} else {
-			animeDTO.NextEpisodeAt = time
-		}
+		animeDTO.NextEpisodeAt = nextEpisodeAt.Time
+	}
+	if notificationSent.Valid {
+		animeDTO.NotificationSent = notificationSent.Bool
 	}
 	return &animeDTO, nil
 }
@@ -164,6 +164,9 @@ func (udao *UserDAO) scanAsUser(result *sql.Rows) (*UserDTO, error) {
 	var telegramID *sql.NullString
 	var telegramUsername *sql.NullString
 	scanErr := result.Scan(&id, &telegramID, &telegramUsername)
+	if scanErr != nil {
+		return nil, scanErr
+	}
 	userDTO := UserDTO{}
 	if id.Valid {
 		userDTO.ID = id.Int64
@@ -171,8 +174,8 @@ func (udao *UserDAO) scanAsUser(result *sql.Rows) (*UserDTO, error) {
 	if telegramID.Valid {
 		userDTO.ExternalID = telegramID.String
 	}
-	if scanErr != nil {
-		return nil, scanErr
+	if telegramUsername.Valid {
+		userDTO.TelegramUsername = telegramUsername.String
 	}
 	return &userDTO, nil
 }
@@ -196,7 +199,7 @@ func (udao *UserDAO) Insert(externalID string, username string) error {
 }
 
 func (udao *UserDAO) insert(tx *sql.Tx, externalID string, username string) error {
-	sqlStatement, stmtErr := tx.Prepare("INSERT INTO TELEGRAM_USERS (TELEGRAM_USER_ID, TELEGRAM_USERNAME) ($1, $2)")
+	sqlStatement, stmtErr := tx.Prepare("INSERT INTO TELEGRAM_USERS (TELEGRAM_USER_ID, TELEGRAM_USERNAME) VALUES($1, $2)")
 	if stmtErr != nil {
 		return stmtErr
 	}
@@ -238,7 +241,7 @@ func (sdao *SubscriptionDAO) Insert(userID int64, animeID int64) error {
 }
 
 func (sdao *SubscriptionDAO) insert(tx *sql.Tx, userID int64, animeID int64) error {
-	sqlStatement, stmtErr := tx.Prepare("INSERT INTO SUBSCRIPTIONS (TELEGRAM_USER_ID, ANIME_ID) ($1, $2)")
+	sqlStatement, stmtErr := tx.Prepare("INSERT INTO SUBSCRIPTIONS (TELEGRAM_USER_ID, ANIME_ID) VALUES($1, $2)")
 	if stmtErr != nil {
 		return stmtErr
 	}
@@ -293,5 +296,22 @@ func (sdao *SubscriptionDAO) delete(tx *sql.Tx, userID int64, animeID int64) err
 	if resErr != nil {
 		return resErr
 	}
+	return nil
+}
+
+//PqTime struct
+type PqTime struct {
+	Time  time.Time
+	Valid bool
+}
+
+//Scan func
+func (pt *PqTime) Scan(value interface{}) error {
+	if value == nil {
+		pt.Valid = false
+		return nil
+	}
+	pt.Time = value.(time.Time)
+	pt.Valid = true
 	return nil
 }
