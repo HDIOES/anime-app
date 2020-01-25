@@ -18,18 +18,19 @@ type AnimeDTO struct {
 	EngName          string
 	ImageURL         string
 	NextEpisodeAt    time.Time
+	NextEpisode      int64
 	NotificationSent bool
 }
 
 const (
-	userAnimesSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT FROM TELEGRAM_USERS AS TU" +
+	userAnimesSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NEXT_EPISODE, ANS.NOTIFICATION_SENT FROM TELEGRAM_USERS AS TU" +
 		" JOIN SUBSCRIPTIONS AS SS ON (TU.TELEGRAM_USER_ID = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
 		" JOIN ANIMES AS ANS ON (ANS.ID = SS.ANIME_ID)"
 
-	notUserAnimesSQL = "SELECT ID, EXTERNALID, RUSNAME, ENGNAME, IMAGEURL, NEXT_EPISODE_AT, NOTIFICATION_SENT FROM ANIMES" +
+	notUserAnimesSQL = "SELECT ID, EXTERNALID, RUSNAME, ENGNAME, IMAGEURL, NEXT_EPISODE_AT, NEXT_EPISODE, NOTIFICATION_SENT FROM ANIMES" +
 		" EXCEPT " + userAnimesSQL
 
-	findAnimeSQL        = "SELECT ID, EXTERNALID, RUSNAME, ENGNAME, IMAGEURL, NEXT_EPISODE_AT, NOTIFICATION_SENT FROM ANIMES WHERE ENGNAME = $1"
+	findAnimeSQL        = "SELECT ID, EXTERNALID, RUSNAME, ENGNAME, IMAGEURL, NEXT_EPISODE_AT, NEXT_EPISODE, NOTIFICATION_SENT FROM ANIMES WHERE ENGNAME = $1"
 	findUserSQL         = "SELECT ID, TELEGRAM_USER_ID, TELEGRAM_USERNAME FROM TELEGRAM_USERS WHERE TELEGRAM_USER_ID = $1"
 	findSubscriptionSQL = "SELECT TELEGRAM_USER_ID, ANIME_ID FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2"
 )
@@ -73,8 +74,9 @@ func (adao *AnimeDAO) scanAsAnime(result *sql.Rows) (*AnimeDTO, error) {
 	var engname *sql.NullString
 	var imageURL *sql.NullString
 	var nextEpisodeAt *PqTime
+	var nextEpisode *sql.NullInt64
 	var notificationSent *sql.NullBool
-	scanErr := result.Scan(&ID, &externalID, &rusname, &engname, &imageURL, &nextEpisodeAt, &notificationSent)
+	scanErr := result.Scan(&ID, &externalID, &rusname, &engname, &imageURL, &nextEpisodeAt, &nextEpisode, &notificationSent)
 	if scanErr != nil {
 		return nil, scanErr
 	}
@@ -96,6 +98,9 @@ func (adao *AnimeDAO) scanAsAnime(result *sql.Rows) (*AnimeDTO, error) {
 	}
 	if nextEpisodeAt.Valid {
 		animeDTO.NextEpisodeAt = nextEpisodeAt.Time
+	}
+	if nextEpisode.Valid {
+		animeDTO.NextEpisode = nextEpisode.Int64
 	}
 	if notificationSent.Valid {
 		animeDTO.NotificationSent = notificationSent.Bool
