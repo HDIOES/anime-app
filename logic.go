@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -27,7 +26,6 @@ type TelegramHandler struct {
 	udao           *dao.UserDAO
 	sdao           *dao.SubscriptionDAO
 	adao           *dao.AnimeDAO
-	db             *sql.DB
 	natsConnection *nats.Conn
 	settings       *Settings
 }

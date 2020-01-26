@@ -22,22 +22,23 @@ func main() {
 	container := dig.New()
 	container.Provide(func() *Settings {
 		if jsonFile, openErr := os.Open("settings.json"); openErr != nil {
-			panic(openErr)
+			log.Panicln(openErr)
 		} else {
 			defer jsonFile.Close()
 			decoder := json.NewDecoder(jsonFile)
 			settings := &Settings{}
 			if decodeErr := decoder.Decode(settings); decodeErr != nil {
-				panic(decodeErr)
+				log.Panicln(decodeErr)
 			} else {
 				return settings
 			}
 		}
+		panic("Unreachable code")
 	})
 	container.Provide(func(settings *Settings) (*sql.DB, *nats.Conn, *dao.AnimeDAO, *dao.UserDAO, *dao.SubscriptionDAO) {
 		db, err := sql.Open("postgres", settings.DatabaseURL)
 		if err != nil {
-			panic(err)
+			log.Panicln(err)
 		}
 		db.SetMaxIdleConns(settings.MaxIdleConnections)
 		db.SetMaxOpenConns(settings.MaxOpenConnections)
@@ -45,24 +46,23 @@ func main() {
 		timeoutDuration, durationErr := time.ParseDuration(timeout)
 		if durationErr != nil {
 			defer db.Close()
-			panic(durationErr)
+			log.Panicln(durationErr)
 		} else {
 			db.SetConnMaxLifetime(timeoutDuration)
 		}
 		if n, migrateErr := migrate.Exec(db, "postgres", &migrate.FileMigrationSource{Dir: settings.MigrationPath}, migrate.Up); migrateErr != nil {
-			panic(migrateErr)
+			log.Panicln(migrateErr)
 		} else {
 			log.Printf("Applied %d migrations!\n", n)
 		}
 		natsConnection, ncErr := nats.Connect(settings.NatsURL)
 		if ncErr != nil {
-			panic(ncErr)
+			log.Panicln(ncErr)
 		}
 		return db, natsConnection, &dao.AnimeDAO{Db: db}, &dao.UserDAO{Db: db}, &dao.SubscriptionDAO{Db: db}
 	})
-	container.Invoke(func(db *sql.DB, settings *Settings, natsConnection *nats.Conn, adao *dao.AnimeDAO, udao *dao.UserDAO, sdao *dao.SubscriptionDAO) {
+	container.Invoke(func(settings *Settings, natsConnection *nats.Conn, adao *dao.AnimeDAO, udao *dao.UserDAO, sdao *dao.SubscriptionDAO) {
 		handler := &TelegramHandler{
-			db:             db,
 			udao:           udao,
 			sdao:           sdao,
 			adao:           adao,
@@ -74,7 +74,7 @@ func main() {
 			WebhookURL: settings.TelegramWebhookURL,
 		}
 		if err := handler.sendNotification(notification); err != nil {
-			panic(err)
+			log.Panicln(err)
 		}
 		srv := &http.Server{Addr: ":8000", Handler: handler}
 		log.Fatal(srv.ListenAndServe())
