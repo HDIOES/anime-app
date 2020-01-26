@@ -97,11 +97,15 @@ func (th *TelegramHandler) animesCommand(update *Update) error {
 	if animeErr != nil {
 		return animeErr
 	}
+	animeNames := make([]string, 0, len(animes))
+	for _, anime := range animes {
+		animeNames = append(animeNames, anime.EngName)
+	}
 	notification := Notification{
 		TelegramID: update.Message.From.ID,
 		Type:       animesCommand,
 		Text:       animesText,
-		Animes:     animes,
+		Animes:     animeNames,
 	}
 	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
 		return sendNotificationErr
@@ -115,11 +119,15 @@ func (th *TelegramHandler) subscriptionsCommand(update *Update) error {
 	if animeErr != nil {
 		return animeErr
 	}
+	animeNames := make([]string, 0, len(animes))
+	for _, anime := range animes {
+		animeNames = append(animeNames, anime.EngName)
+	}
 	notification := Notification{
 		TelegramID: update.Message.From.ID,
 		Type:       subscriptionsCommand,
 		Text:       subscriptionsText,
-		Animes:     animes,
+		Animes:     animeNames,
 	}
 	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
 		return sendNotificationErr
@@ -192,9 +200,9 @@ type User struct {
 
 //Notification struct
 type Notification struct {
-	TelegramID int64          `json:"telegramId"`
-	Type       string         `json:"type"`
-	Text       string         `json:"text"`
-	Animes     []dao.AnimeDTO `json:"animes"`
-	WebhookURL string         `json:"webhookUrl"`
+	TelegramID int64    `json:"telegramId"`
+	Type       string   `json:"type"`
+	Text       string   `json:"text"`
+	Animes     []string `json:"animes"`
+	WebhookURL string   `json:"webhookUrl"`
 }
