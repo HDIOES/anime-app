@@ -3,11 +3,11 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/nats-io/nats.go"
+	"github.com/pkg/errors"
 
 	"github.com/HDIOES/anime-app/dao"
 )
@@ -37,23 +37,28 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	update := &Update{}
 	decodeErr := decoder.Decode(update)
 	if decodeErr != nil {
+		HandleError(decodeErr)
 		th.setStatus(w, 400)
 	}
 	switch update.Message.Text {
 	case "/start":
 		if err := th.startCommand(update); err != nil {
+			HandleError(err)
 			th.setStatus(w, 400)
 		}
 	case "/animes":
 		if err := th.animesCommand(update); err != nil {
+			HandleError(err)
 			th.setStatus(w, 400)
 		}
 	case "/subscriptions":
 		if err := th.subscriptionsCommand(update); err != nil {
+			HandleError(err)
 			th.setStatus(w, 400)
 		}
 	default:
 		if err := th.defaultCommand(update); err != nil {
+			HandleError(err)
 			th.setStatus(w, 400)
 		}
 	}
@@ -66,10 +71,10 @@ func (th *TelegramHandler) setStatus(w http.ResponseWriter, httpStatus int) {
 func (th *TelegramHandler) sendNotification(notification Notification) error {
 	data, dataErr := json.Marshal(notification)
 	if dataErr != nil {
-		return dataErr
+		return errors.WithStack(dataErr)
 	}
 	if publishErr := th.natsConnection.Publish(th.settings.NatsSubject, data); publishErr != nil {
-		return publishErr
+		return errors.WithStack(publishErr)
 	}
 	return nil
 }

@@ -3,6 +3,8 @@ package dao
 import (
 	sql "database/sql"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 //AnimeDAO struct
@@ -39,12 +41,12 @@ const (
 func (adao *AnimeDAO) Find(engname string) (*AnimeDTO, error) {
 	sqlStatement, stmtErr := adao.Db.Prepare(findAnimeSQL)
 	if stmtErr != nil {
-		return nil, stmtErr
+		return nil, errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
 	result, resErr := sqlStatement.Query(engname)
 	if resErr != nil {
-		return nil, resErr
+		return nil, errors.WithStack(resErr)
 	}
 	defer result.Close()
 	if result.Next() {
@@ -78,7 +80,7 @@ func (adao *AnimeDAO) scanAsAnime(result *sql.Rows) (*AnimeDTO, error) {
 	var notificationSent *sql.NullBool
 	scanErr := result.Scan(&ID, &externalID, &rusname, &engname, &imageURL, &nextEpisodeAt, &nextEpisode, &notificationSent)
 	if scanErr != nil {
-		return nil, scanErr
+		return nil, errors.WithStack(scanErr)
 	}
 	animeDTO := AnimeDTO{}
 	if ID.Valid {
@@ -111,12 +113,12 @@ func (adao *AnimeDAO) scanAsAnime(result *sql.Rows) (*AnimeDTO, error) {
 func (adao *AnimeDAO) readAnimesBySQL(externalID string, sqlStr string) ([]AnimeDTO, error) {
 	sqlStatement, stmtErr := adao.Db.Prepare(sqlStr)
 	if stmtErr != nil {
-		return nil, stmtErr
+		return nil, errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
 	result, resErr := sqlStatement.Query(externalID)
 	if resErr != nil {
-		return nil, resErr
+		return nil, errors.WithStack(resErr)
 	}
 	userAnimes := make([]AnimeDTO, 0, 10)
 	for result.Next() {
@@ -146,12 +148,12 @@ type UserDTO struct {
 func (udao *UserDAO) Find(telegramID string) (*UserDTO, error) {
 	sqlStatement, stmtErr := udao.Db.Prepare(findUserSQL)
 	if stmtErr != nil {
-		return nil, stmtErr
+		return nil, errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
 	result, resErr := sqlStatement.Query(telegramID)
 	if resErr != nil {
-		return nil, resErr
+		return nil, errors.WithStack(resErr)
 	}
 	defer result.Close()
 	if result.Next() {
@@ -170,7 +172,7 @@ func (udao *UserDAO) scanAsUser(result *sql.Rows) (*UserDTO, error) {
 	var telegramUsername *sql.NullString
 	scanErr := result.Scan(&id, &telegramID, &telegramUsername)
 	if scanErr != nil {
-		return nil, scanErr
+		return nil, errors.WithStack(scanErr)
 	}
 	userDTO := UserDTO{}
 	if id.Valid {
@@ -189,16 +191,16 @@ func (udao *UserDAO) scanAsUser(result *sql.Rows) (*UserDTO, error) {
 func (udao *UserDAO) Insert(externalID string, username string) error {
 	tx, txErr := udao.Db.Begin()
 	if txErr != nil {
-		return txErr
+		return errors.WithStack(txErr)
 	}
 	if insertErr := udao.insert(tx, externalID, username); insertErr != nil {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return rollbackErr
+			return errors.WithStack(rollbackErr)
 		}
 		return insertErr
 	}
 	if commitErr := tx.Commit(); commitErr != nil {
-		return commitErr
+		return errors.WithStack(commitErr)
 	}
 	return nil
 }
@@ -206,12 +208,12 @@ func (udao *UserDAO) Insert(externalID string, username string) error {
 func (udao *UserDAO) insert(tx *sql.Tx, externalID string, username string) error {
 	sqlStatement, stmtErr := tx.Prepare("INSERT INTO TELEGRAM_USERS (TELEGRAM_USER_ID, TELEGRAM_USERNAME) VALUES($1, $2)")
 	if stmtErr != nil {
-		return stmtErr
+		return errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
 	_, resErr := sqlStatement.Exec(externalID, username)
 	if resErr != nil {
-		return resErr
+		return errors.WithStack(resErr)
 	}
 	return nil
 }
@@ -231,16 +233,16 @@ type SubcriptionDTO struct {
 func (sdao *SubscriptionDAO) Insert(userID int64, animeID int64) error {
 	tx, txErr := sdao.Db.Begin()
 	if txErr != nil {
-		return txErr
+		return errors.WithStack(txErr)
 	}
 	if insertErr := sdao.insert(tx, userID, animeID); insertErr != nil {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return rollbackErr
+			return errors.WithStack(rollbackErr)
 		}
 		return insertErr
 	}
 	if commitErr := tx.Commit(); commitErr != nil {
-		return commitErr
+		return errors.WithStack(commitErr)
 	}
 	return nil
 }
@@ -248,12 +250,12 @@ func (sdao *SubscriptionDAO) Insert(userID int64, animeID int64) error {
 func (sdao *SubscriptionDAO) insert(tx *sql.Tx, userID int64, animeID int64) error {
 	sqlStatement, stmtErr := tx.Prepare("INSERT INTO SUBSCRIPTIONS (TELEGRAM_USER_ID, ANIME_ID) VALUES($1, $2)")
 	if stmtErr != nil {
-		return stmtErr
+		return errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
 	_, resErr := sqlStatement.Exec(userID, animeID)
 	if resErr != nil {
-		return resErr
+		return errors.WithStack(resErr)
 	}
 	return nil
 }
@@ -262,12 +264,12 @@ func (sdao *SubscriptionDAO) insert(tx *sql.Tx, userID int64, animeID int64) err
 func (sdao *SubscriptionDAO) Find(userID int64, animeID int64) (bool, error) {
 	sqlStatement, stmtErr := sdao.Db.Prepare(findSubscriptionSQL)
 	if stmtErr != nil {
-		return false, stmtErr
+		return false, errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
 	result, resErr := sqlStatement.Query(userID, animeID)
 	if resErr != nil {
-		return false, resErr
+		return false, errors.WithStack(resErr)
 	}
 	defer result.Close()
 	return result.Next(), nil
@@ -277,16 +279,16 @@ func (sdao *SubscriptionDAO) Find(userID int64, animeID int64) (bool, error) {
 func (sdao *SubscriptionDAO) Delete(userID int64, animeID int64) error {
 	tx, txErr := sdao.Db.Begin()
 	if txErr != nil {
-		return txErr
+		return errors.WithStack(txErr)
 	}
 	if insertErr := sdao.delete(tx, userID, animeID); insertErr != nil {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return rollbackErr
+			return errors.WithStack(rollbackErr)
 		}
 		return insertErr
 	}
 	if commitErr := tx.Commit(); commitErr != nil {
-		return commitErr
+		return errors.WithStack(commitErr)
 	}
 	return nil
 }
@@ -294,12 +296,12 @@ func (sdao *SubscriptionDAO) Delete(userID int64, animeID int64) error {
 func (sdao *SubscriptionDAO) delete(tx *sql.Tx, userID int64, animeID int64) error {
 	sqlStatement, stmtErr := tx.Prepare("DELETE FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2")
 	if stmtErr != nil {
-		return stmtErr
+		return errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
 	_, resErr := sqlStatement.Exec(userID, animeID)
 	if resErr != nil {
-		return resErr
+		return errors.WithStack(resErr)
 	}
 	return nil
 }

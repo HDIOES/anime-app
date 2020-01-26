@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/HDIOES/anime-app/dao"
-	_ "github.com/lib/pq"
-	nats "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go"
+	"github.com/pkg/errors"
 	migrate "github.com/rubenv/sql-migrate"
 	"go.uber.org/dig"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -90,4 +92,20 @@ type Settings struct {
 	NatsURL            string `json:"natsUrl"`
 	NatsSubject        string `json:"natsSubject"`
 	TelegramWebhookURL string `json:"telegramWebhookUrl"`
+}
+
+//StackTracer struct
+type StackTracer interface {
+	StackTrace() errors.StackTrace
+}
+
+//HandleError func
+func HandleError(handledErr error) {
+	if err, ok := handledErr.(StackTracer); ok {
+		for _, f := range err.StackTrace() {
+			log.Printf("%+s:%d\n", f, f)
+		}
+	} else {
+		log.Println("Unknown error: ", err)
+	}
 }
