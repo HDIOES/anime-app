@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+anime-app
 
 # Test binary, built with `go test -c`
 *.test
