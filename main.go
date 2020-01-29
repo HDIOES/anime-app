@@ -70,13 +70,12 @@ func main() {
 			settings:       settings,
 		}
 		notification := Notification{
-			Type:       "setWebhookNotification",
-			WebhookURL: settings.TelegramWebhookURL,
+			Type: "setWebhookNotification",
 		}
 		if err := handler.sendNotification(notification); err != nil {
 			log.Panicln(err)
 		}
-		srv := &http.Server{Addr: ":8000", Handler: handler}
+		srv := &http.Server{Addr: ":" + strconv.Itoa(settings.ApplicationPort), Handler: handler}
 		log.Fatal(srv.ListenAndServe())
 	})
 }
@@ -91,7 +90,6 @@ type Settings struct {
 	MigrationPath      string `json:"migrationPath"`
 	NatsURL            string `json:"natsUrl"`
 	NatsSubject        string `json:"natsSubject"`
-	TelegramWebhookURL string `json:"telegramWebhookUrl"`
 }
 
 //StackTracer struct
