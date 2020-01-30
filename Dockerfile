@@ -1,3 +1,5 @@
 FROM debian:stretch
-COPY anime-app settings.json migrations/ ./
+COPY anime-app ./
+COPY settings.json ./
+COPY migrations/ ./ 
 ENTRYPOINT ["./anime-app"]
