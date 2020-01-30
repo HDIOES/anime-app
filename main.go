@@ -125,13 +125,13 @@ func setSettingsFromEnv(settings *Settings) {
 		}
 	}
 	if value := os.Getenv(migrationPathEnvName); value != "" {
-		settings.DatabaseURL = value
+		settings.MigrationPath = value
 	}
 	if value := os.Getenv(natsURLEnvName); value != "" {
-		settings.DatabaseURL = value
+		settings.NatsURL = value
 	}
 	if value := os.Getenv(natsSubjectEnvName); value != "" {
-		settings.DatabaseURL = value
+		settings.NatsSubject = value
 	}
 }
 
