@@ -18,6 +18,17 @@ import (
 	_ "github.com/lib/pq"
 )
 
+const (
+	databaseURLEnvName               = "DATABASE_URL"
+	maxOpenConnectionsEnvName        = "MAX_OPEN_CONNECTIONS"
+	maxIdleConnectionsEnvName        = "MAX_IDLE_CONNECTIONS"
+	databaseConnectionTimeoutEnvName = "DATABASE_CONNECTION_TIMEOUT"
+	applicationPortEnvName           = "PORT"
+	migrationPathEnvName             = "DATABASE_MIGRATION_PATH"
+	natsURLEnvName                   = "NATS_URL"
+	natsSubjectEnvName               = "NATS_SUBJECT"
+)
+
 func main() {
 	container := dig.New()
 	container.Provide(func() *Settings {
@@ -30,6 +41,7 @@ func main() {
 			if decodeErr := decoder.Decode(settings); decodeErr != nil {
 				log.Panicln(decodeErr)
 			} else {
+				setSettingsFromEnv(settings)
 				return settings
 			}
 		}
@@ -78,6 +90,49 @@ func main() {
 		srv := &http.Server{Addr: ":" + strconv.Itoa(settings.ApplicationPort), Handler: handler}
 		log.Fatal(srv.ListenAndServe())
 	})
+}
+
+func setSettingsFromEnv(settings *Settings) {
+	if value := os.Getenv(databaseURLEnvName); value != "" {
+		settings.DatabaseURL = value
+	}
+	if value := os.Getenv(maxOpenConnectionsEnvName); value != "" {
+		if intValue, err := strconv.Atoi(value); err != nil {
+			log.Panicln(err)
+		} else {
+			settings.MaxOpenConnections = intValue
+		}
+	}
+	if value := os.Getenv(maxIdleConnectionsEnvName); value != "" {
+		if intValue, err := strconv.Atoi(value); err != nil {
+			log.Panicln(err)
+		} else {
+			settings.MaxIdleConnections = intValue
+		}
+	}
+	if value := os.Getenv(databaseConnectionTimeoutEnvName); value != "" {
+		if intValue, err := strconv.Atoi(value); err != nil {
+			log.Panicln(err)
+		} else {
+			settings.ConnectionTimeout = intValue
+		}
+	}
+	if value := os.Getenv(applicationPortEnvName); value != "" {
+		if intValue, err := strconv.Atoi(value); err != nil {
+			log.Panicln(err)
+		} else {
+			settings.ApplicationPort = intValue
+		}
+	}
+	if value := os.Getenv(migrationPathEnvName); value != "" {
+		settings.DatabaseURL = value
+	}
+	if value := os.Getenv(natsURLEnvName); value != "" {
+		settings.DatabaseURL = value
+	}
+	if value := os.Getenv(natsSubjectEnvName); value != "" {
+		settings.DatabaseURL = value
+	}
 }
 
 //Settings mapping object for settings.json
