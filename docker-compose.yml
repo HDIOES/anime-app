@@ -6,7 +6,7 @@ volumes:
 
 services:
   animedb:
-    image: postgres
+    image: postgres:11.6
     environment:
       POSTGRES_USER: anime_user
       POSTGRES_PASSWORD: 12345

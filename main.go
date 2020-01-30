@@ -81,12 +81,12 @@ func main() {
 			natsConnection: natsConnection,
 			settings:       settings,
 		}
-		notification := Notification{
+		/*notification := Notification{
 			Type: "setWebhookNotification",
 		}
 		if err := handler.sendNotification(notification); err != nil {
 			log.Panicln(err)
-		}
+		}*/
 		srv := &http.Server{Addr: ":" + strconv.Itoa(settings.ApplicationPort), Handler: handler}
 		log.Fatal(srv.ListenAndServe())
 	})
