@@ -14,6 +14,7 @@ import (
 const (
 	welcomeText          = "Данный бот предназначен для своевременного уведомления о выходе в эфир эпизодов ваших любимых аниме-сериалов"
 	alertText            = "С возвращением! Ранее вы уже пользовались ботом, все ваши подписки сохранены"
+	animeNotFoundText    = "Такого аниме не сущестует в нашей базе"
 	startCommand         = "startCommand"
 	animesText           = "Список сериалов"
 	animesCommand        = "animesCommand"
@@ -143,6 +144,10 @@ func (th *TelegramHandler) subscriptionsCommand(update *Update) error {
 }
 
 func (th *TelegramHandler) defaultCommand(update *Update) error {
+	notification := Notification{
+		TelegramID: update.Message.From.ID,
+		Type:       defaultCommand,
+	}
 	telegramUserID := strconv.FormatInt(update.Message.From.ID, 10)
 	userDTO, findUserErr := th.udao.Find(telegramUserID)
 	if findUserErr != nil {
@@ -152,29 +157,26 @@ func (th *TelegramHandler) defaultCommand(update *Update) error {
 	if findAnimeErr != nil {
 		return findAnimeErr
 	}
-	if animeDTO == nil {
-		return errors.New("Anime not found")
-	}
-	found, findErr := th.sdao.Find(userDTO.ID, animeDTO.ID)
-	if findErr != nil {
-		return findErr
-	}
-	notificationText := "Подписка "
-	if found {
-		if deleteErr := th.sdao.Delete(userDTO.ID, animeDTO.ID); deleteErr != nil {
-			return deleteErr
+	if animeDTO != nil {
+		found, findErr := th.sdao.Find(userDTO.ID, animeDTO.ID)
+		if findErr != nil {
+			return findErr
 		}
-		notificationText += "удалена"
+		notificationText := "Подписка "
+		if found {
+			if deleteErr := th.sdao.Delete(userDTO.ID, animeDTO.ID); deleteErr != nil {
+				return deleteErr
+			}
+			notificationText += "удалена"
+		} else {
+			if insertErr := th.sdao.Insert(userDTO.ID, animeDTO.ID); insertErr != nil {
+				return insertErr
+			}
+			notificationText += "добавлена"
+		}
+		notification.Text = notificationText
 	} else {
-		if insertErr := th.sdao.Insert(userDTO.ID, animeDTO.ID); insertErr != nil {
-			return insertErr
-		}
-		notificationText += "добавлена"
-	}
-	notification := Notification{
-		TelegramID: update.Message.From.ID,
-		Type:       defaultCommand,
-		Text:       notificationText,
+		notification.Text = animeNotFoundText
 	}
 	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
 		return sendNotificationErr
