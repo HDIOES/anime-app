@@ -34,41 +34,31 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqReader, logReqErr := logRequest(r)
 	if logReqErr != nil {
 		HandleError(logReqErr)
-		th.setStatus(w, 400)
 	}
 	decoder := json.NewDecoder(reqReader)
 	update := &Update{}
 	decodeErr := decoder.Decode(update)
 	if decodeErr != nil {
 		HandleError(decodeErr)
-		th.setStatus(w, 400)
 	}
 	switch update.Message.Text {
 	case "/start":
 		if err := th.startCommand(update); err != nil {
 			HandleError(err)
-			th.setStatus(w, 400)
 		}
 	case "/animes":
 		if err := th.animesCommand(update); err != nil {
 			HandleError(err)
-			th.setStatus(w, 400)
 		}
 	case "/subscriptions":
 		if err := th.subscriptionsCommand(update); err != nil {
 			HandleError(err)
-			th.setStatus(w, 400)
 		}
 	default:
 		if err := th.defaultCommand(update); err != nil {
 			HandleError(err)
-			th.setStatus(w, 400)
 		}
 	}
-}
-
-func (th *TelegramHandler) setStatus(w http.ResponseWriter, httpStatus int) {
-	w.WriteHeader(httpStatus)
 }
 
 func (th *TelegramHandler) sendNotification(notification Notification) error {
@@ -85,6 +75,13 @@ func (th *TelegramHandler) sendNotification(notification Notification) error {
 func (th *TelegramHandler) startCommand(update *Update) error {
 	telegramUserID := strconv.FormatInt(update.Message.From.ID, 10)
 	telegramUsername := update.Message.From.Username
+	userDTO, findErr := th.udao.Find(telegramUserID)
+	if findErr != nil {
+		return findErr
+	}
+	if userDTO == nil {
+		return errors.New("User not found")
+	}
 	if insertErr := th.udao.Insert(telegramUserID, telegramUsername); insertErr != nil {
 		return insertErr
 	}
