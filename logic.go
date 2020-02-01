@@ -31,7 +31,12 @@ type TelegramHandler struct {
 }
 
 func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	decoder := json.NewDecoder(r.Body)
+	reqReader, logReqErr := logRequest(r)
+	if logReqErr != nil {
+		HandleError(logReqErr)
+		th.setStatus(w, 400)
+	}
+	decoder := json.NewDecoder(reqReader)
 	update := &Update{}
 	decodeErr := decoder.Decode(update)
 	if decodeErr != nil {
