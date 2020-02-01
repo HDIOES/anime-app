@@ -13,6 +13,7 @@ import (
 
 const (
 	welcomeText          = "Данный бот предназначен для своевременного уведомления о выходе в эфир эпизодов ваших любимых аниме-сериалов"
+	alertText            = "С возвращением! Ранее вы уже пользовались ботом, все ваши подписки сохранены"
 	startCommand         = "startCommand"
 	animesText           = "Список сериалов"
 	animesCommand        = "animesCommand"
@@ -79,16 +80,17 @@ func (th *TelegramHandler) startCommand(update *Update) error {
 	if findErr != nil {
 		return findErr
 	}
-	if userDTO == nil {
-		return errors.New("User not found")
-	}
-	if insertErr := th.udao.Insert(telegramUserID, telegramUsername); insertErr != nil {
-		return insertErr
-	}
 	notification := Notification{
 		TelegramID: update.Message.From.ID,
 		Type:       startCommand,
-		Text:       welcomeText,
+	}
+	if userDTO == nil {
+		if insertErr := th.udao.Insert(telegramUserID, telegramUsername); insertErr != nil {
+			return insertErr
+		}
+		notification.Text = welcomeText
+	} else {
+		notification.Text = alertText
 	}
 	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
 		return sendNotificationErr
