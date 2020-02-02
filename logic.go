@@ -43,9 +43,13 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if decodeErr != nil {
 		HandleError(decodeErr)
 	}
+	existedBefore, err := th.checkAndSaveUserIfPossible(update)
+	if err != nil {
+		HandleError(err)
+	}
 	switch update.Message.Text {
 	case "/start":
-		if err := th.startCommand(update); err != nil {
+		if err := th.startCommand(update, existedBefore); err != nil {
 			HandleError(err)
 		}
 	case "/animes":
@@ -63,6 +67,22 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (th *TelegramHandler) checkAndSaveUserIfPossible(update *Update) (existedBefore bool, err error) {
+	telegramUserID := strconv.FormatInt(update.Message.From.ID, 10)
+	telegramUsername := update.Message.From.Username
+	userDTO, findErr := th.udao.Find(telegramUserID)
+	if findErr != nil {
+		return false, findErr
+	}
+	if userDTO == nil {
+		if insertErr := th.udao.Insert(telegramUserID, telegramUsername); insertErr != nil {
+			return false, insertErr
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
 func (th *TelegramHandler) sendNotification(notification Notification) error {
 	data, dataErr := json.Marshal(notification)
 	if dataErr != nil {
@@ -74,21 +94,12 @@ func (th *TelegramHandler) sendNotification(notification Notification) error {
 	return nil
 }
 
-func (th *TelegramHandler) startCommand(update *Update) error {
-	telegramUserID := strconv.FormatInt(update.Message.From.ID, 10)
-	telegramUsername := update.Message.From.Username
-	userDTO, findErr := th.udao.Find(telegramUserID)
-	if findErr != nil {
-		return findErr
-	}
+func (th *TelegramHandler) startCommand(update *Update, existedBefore bool) error {
 	notification := Notification{
 		TelegramID: update.Message.From.ID,
 		Type:       startCommand,
 	}
-	if userDTO == nil {
-		if insertErr := th.udao.Insert(telegramUserID, telegramUsername); insertErr != nil {
-			return insertErr
-		}
+	if !existedBefore {
 		notification.Text = welcomeText
 	} else {
 		notification.Text = alertText
