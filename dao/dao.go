@@ -30,14 +30,15 @@ type UserAnimeDTO struct {
 }
 
 const (
-	findAnimeByInternalIDAndByInternalUserIDSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, TU.ID FROM TELEGRAM_USERS AS TU" +
-		" JOIN SUBSCRIPTIONS AS SS ON (TU.ID = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
-		" RIGHT JOIN ANIMES AS ANS ON (ANS.ID = SS.ANIME_ID AND ANS.ID = $2)"
-	findUserByInternalIDSQL       = "SELECT ID, TELEGRAM_USER_ID, TELEGRAM_USERNAME FROM TELEGRAM_USERS WHERE TELEGRAM_USER_ID = $1"
-	findAllAnimeByInternalUserSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, TU.ID FROM TELEGRAM_USERS AS TU" +
-		" JOIN SUBSCRIPTIONS AS SS ON (TU.ID = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
-		" RIGHT JOIN ANIMES AS ANS ON (ANS.ID = SS.ANIME_ID)"
-	findSubscriptionSQL = "SELECT TELEGRAM_USER_ID, ANIME_ID FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2"
+	findAnimeByInternalIDAndByInternalUserIDSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, SS.ANIME_ID FROM ANIMES AS ANS" +
+		" LEFT JOIN SUBSCRIPTIONS AS SS ON (ANS.ID = SS.ANIME_ID AND SS.TELEGRAM_USER_ID = $1) WHERE ANS.ID = $2;"
+	findAllAnimeByInternalUserIDSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, SS.ANIME_ID FROM ANIMES AS ANS" +
+		" LEFT JOIN SUBSCRIPTIONS AS SS ON (ANS.ID = SS.ANIME_ID AND SS.TELEGRAM_USER_ID = $1)"
+	findUserByInternalIDSQL = "SELECT ID, TELEGRAM_USER_ID, TELEGRAM_USERNAME FROM TELEGRAM_USERS WHERE TELEGRAM_USER_ID = $1"
+	findSubscriptionSQL     = "SELECT TELEGRAM_USER_ID, ANIME_ID FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2"
+	insertUserSQL           = "INSERT INTO TELEGRAM_USERS (TELEGRAM_USER_ID, TELEGRAM_USERNAME) VALUES($1, $2) RETURNING ID"
+	insertSubscriptionSQL   = "INSERT INTO SUBSCRIPTIONS (TELEGRAM_USER_ID, ANIME_ID) VALUES($1, $2)"
+	deleteSubscriptionSQL   = "DELETE FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2"
 )
 
 //FindByUserIDAndInternalID func
@@ -64,7 +65,7 @@ func (adao *AnimeDAO) FindByUserIDAndInternalID(internalUserID, internalAnimeID 
 
 //ReadUserAnimes func
 func (adao *AnimeDAO) ReadUserAnimes(internalUserID int64) ([]UserAnimeDTO, error) {
-	return adao.readUserAnimesBySQL(internalUserID, findAllAnimeByInternalUserSQL)
+	return adao.readUserAnimesBySQL(internalUserID, findAllAnimeByInternalUserIDSQL)
 }
 
 func (adao *AnimeDAO) scanAsUserAnime(result *sql.Rows) (*UserAnimeDTO, error) {
@@ -203,7 +204,7 @@ func (udao *UserDAO) Insert(externalID string, username string) (*UserDTO, error
 }
 
 func (udao *UserDAO) insert(tx *sql.Tx, externalID string, username string) (*UserDTO, error) {
-	sqlStatement, stmtErr := tx.Prepare("INSERT INTO TELEGRAM_USERS (TELEGRAM_USER_ID, TELEGRAM_USERNAME) VALUES($1, $2) RETURNING ID")
+	sqlStatement, stmtErr := tx.Prepare(insertUserSQL)
 	if stmtErr != nil {
 		return nil, errors.WithStack(stmtErr)
 	}
@@ -274,7 +275,7 @@ func (sdao *SubscriptionDAO) Insert(userID int64, animeID int64) error {
 }
 
 func (sdao *SubscriptionDAO) insert(tx *sql.Tx, userID int64, animeID int64) error {
-	sqlStatement, stmtErr := tx.Prepare("INSERT INTO SUBSCRIPTIONS (TELEGRAM_USER_ID, ANIME_ID) VALUES($1, $2)")
+	sqlStatement, stmtErr := tx.Prepare(insertSubscriptionSQL)
 	if stmtErr != nil {
 		return errors.WithStack(stmtErr)
 	}
@@ -285,21 +286,6 @@ func (sdao *SubscriptionDAO) insert(tx *sql.Tx, userID int64, animeID int64) err
 	}
 	return nil
 }
-
-//Find func
-/*func (sdao *SubscriptionDAO) Find(userID int64, animeID int64) (bool, error) {
-	sqlStatement, stmtErr := sdao.Db.Prepare(findSubscriptionSQL)
-	if stmtErr != nil {
-		return false, errors.WithStack(stmtErr)
-	}
-	defer sqlStatement.Close()
-	result, resErr := sqlStatement.Query(userID, animeID)
-	if resErr != nil {
-		return false, errors.WithStack(resErr)
-	}
-	defer result.Close()
-	return result.Next(), nil
-}*/
 
 //Delete func
 func (sdao *SubscriptionDAO) Delete(userID int64, animeID int64) error {
@@ -320,7 +306,7 @@ func (sdao *SubscriptionDAO) Delete(userID int64, animeID int64) error {
 }
 
 func (sdao *SubscriptionDAO) delete(tx *sql.Tx, userID int64, animeID int64) error {
-	sqlStatement, stmtErr := tx.Prepare("DELETE FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2")
+	sqlStatement, stmtErr := tx.Prepare(deleteSubscriptionSQL)
 	if stmtErr != nil {
 		return errors.WithStack(stmtErr)
 	}
