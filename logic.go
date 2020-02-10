@@ -320,7 +320,7 @@ type TelegramCommandMessage struct {
 	TelegramID int64  `json:"telegramId"`
 	Text       string `json:"text"`
 	//inline query fields
-	InlineQueryID string        `json:"inline_query_id"`
+	InlineQueryID string        `json:"inlineQueryId"`
 	InlineAnimes  []InlineAnime `json:"inlineAnimes"`
 	//fields for anime information after typing '/start shikimoriId' in private chat
 	AnimeInfo InlineAnime `json:"animeInfo"`
@@ -331,5 +331,5 @@ type InlineAnime struct {
 	InternalID           int64  `json:"id"`
 	AnimeName            string `json:"animeName"`
 	AnimeThumbnailPicURL string `json:"animeThumbNailPicUrl"`
-	BottomInlineButton   string `json:"bottom_inline_button"`
+	BottomInlineButton   string `json:"bottomInlineButton"`
 }
