@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
@@ -12,15 +13,25 @@ import (
 )
 
 const (
-	welcomeText          = "Данный бот предназначен для своевременного уведомления о выходе в эфир эпизодов ваших любимых аниме-сериалов"
-	alertText            = "С возвращением! Ранее вы уже пользовались ботом, все ваши подписки сохранены"
-	animeNotFoundText    = "Такого аниме не сущестует в нашей базе"
-	startCommand         = "startCommand"
-	animesText           = "Список сериалов"
-	animesCommand        = "animesCommand"
-	subscriptionsText    = "Список подписок"
-	subscriptionsCommand = "subscriptionsCommand"
-	defaultCommand       = "defaultCommand"
+	welcomeText        = "Данный бот предназначен для своевременного уведомления о выходе в эфир эпизодов ваших любимых аниме-сериалов"
+	alertText          = "С возвращением! Ранее вы уже пользовались ботом, все ваши подписки сохранены"
+	unknownCommandText = "Неизвестная команда"
+)
+
+const (
+	startCommand          = "startCommand"
+	startWithAnimeCommand = "startWithArgumentCommand"
+	notificationCommand   = "notificationCommand"
+	defaultCommand        = "defaultCommand"
+	subscribeCommand      = "subscribeCommand"
+	unsubscribeCommand    = "unsubscribeCommand"
+	inlineQueryCommand    = "inlineQueryCommand"
+)
+
+const (
+	subscribeButtonText   = "Подписаться"
+	unsubscribeButtonText = "Отписаться"
+	redirectButtonText    = "Подробности"
 )
 
 //TelegramHandler struct
@@ -43,48 +54,95 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if decodeErr != nil {
 		HandleError(decodeErr)
 	}
-	existedBefore, err := th.checkAndSaveUserIfPossible(update)
+	isMessage := update.Message != nil
+	isInlineQuery := update.InlineQuery != nil
+	isCallbackQuery := update.CallbackQuery != nil
+	existedBefore := false
+	var err error
+	var userDTO *dao.UserDTO
+	if isMessage {
+		userDTO, existedBefore, err = th.checkAndSaveUserIfPossible(&update.Message.From)
+	} else if isInlineQuery {
+		userDTO, existedBefore, err = th.checkAndSaveUserIfPossible(&update.InlineQuery.From)
+	} else if isCallbackQuery {
+		userDTO, existedBefore, err = th.checkAndSaveUserIfPossible(&update.CallbackQuery.From)
+	}
 	if err != nil {
 		HandleError(err)
 	}
-	switch update.Message.Text {
-	case "/start":
-		if err := th.startCommand(update, existedBefore); err != nil {
+	if isMessage {
+		parts := strings.SplitN(update.Message.Text, " ", 2)
+		command := parts[0]
+		switch command {
+		case "/start":
+			countOfSubstrings := len(parts)
+			if countOfSubstrings == 1 {
+				if err := th.startCommand(update.Message.From.ID, existedBefore); err != nil {
+					HandleError(err)
+				}
+			} else {
+				internalAnimeID, err := strconv.ParseInt(parts[1], 10, 64)
+				if err != nil {
+					HandleError(errors.WithStack(err))
+				}
+				if err := th.startCommandWithArgument(update.Message.From.ID, internalAnimeID, existedBefore); err != nil {
+					HandleError(err)
+				}
+			}
+		default:
+			if err := th.defaultCommand(update.Message.From.ID); err != nil {
+				HandleError(err)
+			}
+		}
+	} else if isInlineQuery {
+		if err := th.inlineQueryCommand(update); err != nil {
 			HandleError(err)
 		}
-	case "/animes":
-		if err := th.animesCommand(update); err != nil {
-			HandleError(err)
-		}
-	case "/subscriptions":
-		if err := th.subscriptionsCommand(update); err != nil {
-			HandleError(err)
-		}
-	default:
-		if err := th.defaultCommand(update); err != nil {
-			HandleError(err)
+	} else if isCallbackQuery {
+		parts := strings.SplitN(update.CallbackQuery.Data, " ", 2)
+		countOfSubstrings := len(parts)
+		if countOfSubstrings == 2 {
+			command := parts[0]
+			internalAnimeID, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil {
+				HandleError(errors.WithStack(err))
+			}
+			switch command {
+			case "sub":
+				{
+					if err := th.subscribeCommand(userDTO.ID, internalAnimeID); err != nil {
+						HandleError(err)
+					}
+				}
+			case "unsub":
+				{
+					if err := th.unsubscribeCommand(userDTO.ID, internalAnimeID); err != nil {
+						HandleError(err)
+					}
+				}
+			}
 		}
 	}
 }
 
-func (th *TelegramHandler) checkAndSaveUserIfPossible(update *Update) (existedBefore bool, err error) {
-	telegramUserID := strconv.FormatInt(update.Message.From.ID, 10)
-	telegramUsername := update.Message.From.Username
-	userDTO, findErr := th.udao.Find(telegramUserID)
+func (th *TelegramHandler) checkAndSaveUserIfPossible(user *User) (userDTO *dao.UserDTO, existedBefore bool, err error) {
+	telegramUserID := strconv.FormatInt(user.ID, 10)
+	telegramUsername := user.Username
+	userDto, findErr := th.udao.Find(telegramUserID)
 	if findErr != nil {
-		return false, findErr
+		return nil, false, findErr
 	}
-	if userDTO == nil {
-		if insertErr := th.udao.Insert(telegramUserID, telegramUsername); insertErr != nil {
-			return false, insertErr
+	if userDto == nil {
+		if newUserDTO, insertErr := th.udao.Insert(telegramUserID, telegramUsername); insertErr != nil {
+			return newUserDTO, false, insertErr
 		}
-		return false, nil
+		return nil, false, nil
 	}
-	return true, nil
+	return userDto, true, nil
 }
 
-func (th *TelegramHandler) sendNotification(notification Notification) error {
-	data, dataErr := json.Marshal(notification)
+func (th *TelegramHandler) sendNtsMessage(ntsMessage *TelegramCommandMessage) error {
+	data, dataErr := json.Marshal(ntsMessage)
 	if dataErr != nil {
 		return errors.WithStack(dataErr)
 	}
@@ -94,111 +152,133 @@ func (th *TelegramHandler) sendNotification(notification Notification) error {
 	return nil
 }
 
-func (th *TelegramHandler) startCommand(update *Update, existedBefore bool) error {
-	notification := Notification{
-		TelegramID: update.Message.From.ID,
+func (th *TelegramHandler) startCommandWithArgument(userTelegramID, internalAnimeID int64, existedBefore bool) error {
+	animeDTO, err := th.adao.FindByUserIDAndInternalID(userTelegramID, internalAnimeID)
+	if err != nil {
+		return err
+	}
+	if animeDTO != nil {
+		//StartCommandWithoutArgs
+		ntsMessage := TelegramCommandMessage{
+			TelegramID: userTelegramID,
+			AnimeInfo: InlineAnime{
+				InternalID:           animeDTO.ID,
+				AnimeName:            animeDTO.EngName,
+				AnimeThumbnailPicURL: animeDTO.ImageURL,
+			},
+		}
+		if animeDTO.UserHasSubscription {
+			ntsMessage.Type = unsubscribeCommand
+			ntsMessage.AnimeInfo.BottomInlineButton = subscribeButtonText
+		} else {
+			ntsMessage.Type = subscribeCommand
+			ntsMessage.AnimeInfo.BottomInlineButton = unsubscribeButtonText
+		}
+		if err := th.sendNtsMessage(&ntsMessage); err != nil {
+			return err
+		}
+	} else {
+		//DefaultCommand
+		if err := th.defaultCommand(userTelegramID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (th *TelegramHandler) startCommand(userTelegramID int64, existedBefore bool) error {
+	ntsMessage := TelegramCommandMessage{
+		TelegramID: userTelegramID,
 		Type:       startCommand,
 	}
 	if !existedBefore {
-		notification.Text = welcomeText
+		ntsMessage.Text = welcomeText
 	} else {
-		notification.Text = alertText
+		ntsMessage.Text = alertText
 	}
-	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
-		return sendNotificationErr
-	}
-	return nil
-}
-
-func (th *TelegramHandler) animesCommand(update *Update) error {
-	telegramUserID := strconv.FormatInt(update.Message.From.ID, 10)
-	animes, animeErr := th.adao.ReadNotUserAnimes(telegramUserID)
-	if animeErr != nil {
-		return animeErr
-	}
-	animeNames := make([]string, 0, len(animes))
-	for _, anime := range animes {
-		animeNames = append(animeNames, anime.EngName)
-	}
-	notification := Notification{
-		TelegramID: update.Message.From.ID,
-		Type:       animesCommand,
-		Text:       animesText,
-		Animes:     animeNames,
-	}
-	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
-		return sendNotificationErr
+	if err := th.sendNtsMessage(&ntsMessage); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (th *TelegramHandler) subscriptionsCommand(update *Update) error {
-	telegramUserID := strconv.FormatInt(update.Message.From.ID, 10)
-	animes, animeErr := th.adao.ReadUserAnimes(telegramUserID)
-	if animeErr != nil {
-		return animeErr
+func (th *TelegramHandler) inlineQueryCommand(update *Update) error {
+	ntsMessage := TelegramCommandMessage{
+		Type:          inlineQueryCommand,
+		InlineQueryID: update.InlineQuery.ID,
 	}
-	animeNames := make([]string, 0, len(animes))
-	for _, anime := range animes {
-		animeNames = append(animeNames, anime.EngName)
+	userAnimes, err := th.adao.ReadUserAnimes(strconv.FormatInt(update.InlineQuery.From.ID, 10))
+	if err != nil {
+		return err
 	}
-	notification := Notification{
-		TelegramID: update.Message.From.ID,
-		Type:       subscriptionsCommand,
-		Text:       subscriptionsText,
-		Animes:     animeNames,
+	countOfUserAnimes := len(userAnimes)
+	ntsMessage.InlineAnimes = make([]InlineAnime, countOfUserAnimes)
+	for _, userAnime := range userAnimes {
+		ntsMessage.InlineAnimes = append(ntsMessage.InlineAnimes, InlineAnime{
+			InternalID:           userAnime.ID,
+			AnimeName:            userAnime.EngName,
+			AnimeThumbnailPicURL: userAnime.ImageURL,
+			BottomInlineButton:   redirectButtonText,
+		})
 	}
-	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
-		return sendNotificationErr
+	if err := th.sendNtsMessage(&ntsMessage); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (th *TelegramHandler) defaultCommand(update *Update) error {
-	notification := Notification{
-		TelegramID: update.Message.From.ID,
+func (th *TelegramHandler) subscribeCommand(userID, animeID int64) error {
+	found, err := th.sdao.Find(userID, animeID)
+	if err != nil {
+		return err
+	}
+	if found {
+		if err := th.defaultCommand(userID); err != nil {
+			return err
+		}
+	} else {
+		if err := th.sdao.Insert(userID, animeID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (th *TelegramHandler) unsubscribeCommand(userID, animeID int64) error {
+	found, err := th.sdao.Find(userID, animeID)
+	if err != nil {
+		return err
+	}
+	if found {
+		if err := th.sdao.Delete(userID, animeID); err != nil {
+			return err
+		}
+	} else {
+		if err := th.defaultCommand(userID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (th *TelegramHandler) defaultCommand(userTelegramID int64) error {
+	nstMessage := TelegramCommandMessage{
+		TelegramID: userTelegramID,
 		Type:       defaultCommand,
+		Text:       unknownCommandText,
 	}
-	telegramUserID := strconv.FormatInt(update.Message.From.ID, 10)
-	userDTO, findUserErr := th.udao.Find(telegramUserID)
-	if findUserErr != nil {
-		return findUserErr
-	}
-	animeDTO, findAnimeErr := th.adao.Find(update.Message.Text)
-	if findAnimeErr != nil {
-		return findAnimeErr
-	}
-	if animeDTO != nil {
-		found, findErr := th.sdao.Find(userDTO.ID, animeDTO.ID)
-		if findErr != nil {
-			return findErr
-		}
-		notificationText := "Подписка "
-		if found {
-			if deleteErr := th.sdao.Delete(userDTO.ID, animeDTO.ID); deleteErr != nil {
-				return deleteErr
-			}
-			notificationText += "удалена"
-		} else {
-			if insertErr := th.sdao.Insert(userDTO.ID, animeDTO.ID); insertErr != nil {
-				return insertErr
-			}
-			notificationText += "добавлена"
-		}
-		notification.Text = notificationText
-	} else {
-		notification.Text = animeNotFoundText
-	}
-	if sendNotificationErr := th.sendNotification(notification); sendNotificationErr != nil {
-		return sendNotificationErr
+	if sendNstMessageErr := th.sendNtsMessage(&nstMessage); sendNstMessageErr != nil {
+		return sendNstMessageErr
 	}
 	return nil
 }
 
 //Update struct
 type Update struct {
-	UpdateID int64   `json:"update_id"`
-	Message  Message `json:"message"`
+	UpdateID      int64          `json:"update_id"`
+	Message       *Message       `json:"message"`
+	InlineQuery   *InlineQuery   `json:"inline_query"`
+	CallbackQuery *CallbackQuery `json:"callback_query"`
 }
 
 //Message struct
@@ -206,6 +286,21 @@ type Message struct {
 	MessageID int64  `json:"message_id"`
 	From      User   `json:"from"`
 	Text      string `json:"text"`
+}
+
+//InlineQuery struct
+type InlineQuery struct {
+	ID     string `json:"id"`
+	From   User   `json:"from"`
+	Query  string `json:"query"`
+	Offset string `json:"offset"`
+}
+
+//CallbackQuery struct
+type CallbackQuery struct {
+	ID   string `json:"id"`
+	From User   `json:"from"`
+	Data string `json:"data"`
 }
 
 //User struct
@@ -218,11 +313,23 @@ type User struct {
 	LanguageCode string `json:"language_code"`
 }
 
-//Notification struct
-type Notification struct {
-	TelegramID int64    `json:"telegramId"`
-	Type       string   `json:"type"`
-	Text       string   `json:"text"`
-	Animes     []string `json:"animes"`
-	WebhookURL string   `json:"webhookUrl"`
+//TelegramCommandMessage struct
+type TelegramCommandMessage struct {
+	Type string `json:"type"`
+	//fields for notification and /start without arguments
+	TelegramID int64  `json:"telegramId"`
+	Text       string `json:"text"`
+	//inline query fields
+	InlineQueryID string        `json:"inline_query_id"`
+	InlineAnimes  []InlineAnime `json:"inlineAnimes"`
+	//fields for anime information after typing '/start shikimoriId' in private chat
+	AnimeInfo InlineAnime `json:"animeInfo"`
+}
+
+//InlineAnime struct
+type InlineAnime struct {
+	InternalID           int64  `json:"id"`
+	AnimeName            string `json:"animeName"`
+	AnimeThumbnailPicURL string `json:"animeThumbNailPicUrl"`
+	BottomInlineButton   string `json:"bottom_inline_button"`
 }
