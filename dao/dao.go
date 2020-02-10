@@ -30,24 +30,24 @@ type UserAnimeDTO struct {
 }
 
 const (
-	findAnimeByInternalIDAndByUserSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, TU.ID FROM TELEGRAM_USERS AS TU" +
-		" JOIN SUBSCRIPTIONS AS SS ON (TU.TELEGRAM_USER_ID = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
+	findAnimeByInternalIDAndByInternalUserIDSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, TU.ID FROM TELEGRAM_USERS AS TU" +
+		" JOIN SUBSCRIPTIONS AS SS ON (TU.ID = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
 		" RIGHT JOIN ANIMES AS ANS ON (ANS.ID = SS.ANIME_ID AND ANS.ID = $2)"
-	findUserSQL           = "SELECT ID, TELEGRAM_USER_ID, TELEGRAM_USERNAME FROM TELEGRAM_USERS WHERE TELEGRAM_USER_ID = $1"
-	findAllAnimeByUserSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, TU.ID FROM TELEGRAM_USERS AS TU" +
-		" JOIN SUBSCRIPTIONS AS SS ON (TU.TELEGRAM_USER_ID = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
+	findUserByInternalIDSQL       = "SELECT ID, TELEGRAM_USER_ID, TELEGRAM_USERNAME FROM TELEGRAM_USERS WHERE TELEGRAM_USER_ID = $1"
+	findAllAnimeByInternalUserSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, TU.ID FROM TELEGRAM_USERS AS TU" +
+		" JOIN SUBSCRIPTIONS AS SS ON (TU.ID = $1 AND TU.ID = SS.TELEGRAM_USER_ID)" +
 		" RIGHT JOIN ANIMES AS ANS ON (ANS.ID = SS.ANIME_ID)"
 	findSubscriptionSQL = "SELECT TELEGRAM_USER_ID, ANIME_ID FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2"
 )
 
 //FindByUserIDAndInternalID func
-func (adao *AnimeDAO) FindByUserIDAndInternalID(telegramUserID, internalID int64) (*UserAnimeDTO, error) {
-	sqlStatement, stmtErr := adao.Db.Prepare(findAnimeByInternalIDAndByUserSQL)
+func (adao *AnimeDAO) FindByUserIDAndInternalID(internalUserID, internalAnimeID int64) (*UserAnimeDTO, error) {
+	sqlStatement, stmtErr := adao.Db.Prepare(findAnimeByInternalIDAndByInternalUserIDSQL)
 	if stmtErr != nil {
 		return nil, errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
-	result, resErr := sqlStatement.Query(telegramUserID, internalID)
+	result, resErr := sqlStatement.Query(internalUserID, internalAnimeID)
 	if resErr != nil {
 		return nil, errors.WithStack(resErr)
 	}
@@ -63,8 +63,8 @@ func (adao *AnimeDAO) FindByUserIDAndInternalID(telegramUserID, internalID int64
 }
 
 //ReadUserAnimes func
-func (adao *AnimeDAO) ReadUserAnimes(externalID string) ([]UserAnimeDTO, error) {
-	return adao.readUserAnimesBySQL(externalID, findAllAnimeByUserSQL)
+func (adao *AnimeDAO) ReadUserAnimes(internalUserID int64) ([]UserAnimeDTO, error) {
+	return adao.readUserAnimesBySQL(internalUserID, findAllAnimeByInternalUserSQL)
 }
 
 func (adao *AnimeDAO) scanAsUserAnime(result *sql.Rows) (*UserAnimeDTO, error) {
@@ -106,13 +106,13 @@ func (adao *AnimeDAO) scanAsUserAnime(result *sql.Rows) (*UserAnimeDTO, error) {
 	return &userAnimeDTO, nil
 }
 
-func (adao *AnimeDAO) readUserAnimesBySQL(externalID string, sqlStr string) ([]UserAnimeDTO, error) {
+func (adao *AnimeDAO) readUserAnimesBySQL(internalUserID int64, sqlStr string) ([]UserAnimeDTO, error) {
 	sqlStatement, stmtErr := adao.Db.Prepare(sqlStr)
 	if stmtErr != nil {
 		return nil, errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
-	result, resErr := sqlStatement.Query(externalID)
+	result, resErr := sqlStatement.Query(internalUserID)
 	if resErr != nil {
 		return nil, errors.WithStack(resErr)
 	}
@@ -142,7 +142,7 @@ type UserDTO struct {
 
 //Find func
 func (udao *UserDAO) Find(telegramID string) (*UserDTO, error) {
-	sqlStatement, stmtErr := udao.Db.Prepare(findUserSQL)
+	sqlStatement, stmtErr := udao.Db.Prepare(findUserByInternalIDSQL)
 	if stmtErr != nil {
 		return nil, errors.WithStack(stmtErr)
 	}

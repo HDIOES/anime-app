@@ -95,7 +95,7 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else if isInlineQuery {
-		if err := th.inlineQueryCommand(update); err != nil {
+		if err := th.inlineQueryCommand(userDTO.ID, update); err != nil {
 			HandleError(err)
 		}
 	} else if isCallbackQuery {
@@ -202,12 +202,12 @@ func (th *TelegramHandler) startCommand(userTelegramID int64, existedBefore bool
 	return nil
 }
 
-func (th *TelegramHandler) inlineQueryCommand(update *Update) error {
+func (th *TelegramHandler) inlineQueryCommand(internalUserID int64, update *Update) error {
 	ntsMessage := TelegramCommandMessage{
 		Type:          inlineQueryCommand,
 		InlineQueryID: update.InlineQuery.ID,
 	}
-	userAnimes, err := th.adao.ReadUserAnimes(strconv.FormatInt(update.InlineQuery.From.ID, 10))
+	userAnimes, err := th.adao.ReadUserAnimes(internalUserID)
 	if err != nil {
 		return err
 	}
