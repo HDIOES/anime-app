@@ -2,6 +2,7 @@ package dao
 
 import (
 	sql "database/sql"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -115,7 +116,7 @@ func (adao *AnimeDAO) readUserAnimesBySQL(internalUserID int64, sentence string,
 		return nil, errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
-	result, resErr := sqlStatement.Query(internalUserID, sentence)
+	result, resErr := sqlStatement.Query(internalUserID, fmt.Sprintf("%%%s%%", sentence))
 	if resErr != nil {
 		return nil, errors.WithStack(resErr)
 	}
