@@ -13,25 +13,20 @@ import (
 )
 
 const (
-	welcomeText        = "Данный бот предназначен для своевременного уведомления о выходе в эфир эпизодов ваших любимых аниме-сериалов"
-	alertText          = "С возвращением! Ранее вы уже пользовались ботом, все ваши подписки сохранены"
-	unknownCommandText = "Неизвестная команда"
-)
-
-const (
-	startCommand          = "startCommand"
-	startWithAnimeCommand = "startWithArgumentCommand"
-	notificationCommand   = "notificationCommand"
-	defaultCommand        = "defaultCommand"
-	subscribeCommand      = "subscribeCommand"
-	unsubscribeCommand    = "unsubscribeCommand"
-	inlineQueryCommand    = "inlineQueryCommand"
-)
-
-const (
+	welcomeText           = "Данный бот предназначен для своевременного уведомления о выходе в эфир эпизодов ваших любимых аниме-сериалов"
+	alertText             = "С возвращением! Ранее вы уже пользовались ботом, все ваши подписки сохранены"
+	unknownCommandText    = "Неизвестная команда"
 	subscribeButtonText   = "Подписаться"
 	unsubscribeButtonText = "Отписаться"
 	redirectButtonText    = "Подробности"
+)
+
+const (
+	startType       = "startType"
+	answerQueryType = "answerQueryType"
+	subscribeType   = "subscribeType"
+	unsubscribeType = "unsubscribeType"
+	defaultType     = "defaultType"
 )
 
 //TelegramHandler struct
@@ -153,25 +148,25 @@ func (th *TelegramHandler) sendNtsMessage(ntsMessage *TelegramCommandMessage) er
 }
 
 func (th *TelegramHandler) startCommandWithArgument(userTelegramID, internalAnimeID int64, existedBefore bool) error {
-	animeDTO, err := th.adao.FindByUserIDAndInternalID(userTelegramID, internalAnimeID)
+	userAnimeDTO, err := th.adao.FindByUserIDAndInternalID(userTelegramID, internalAnimeID)
 	if err != nil {
 		return err
 	}
-	if animeDTO != nil {
+	if userAnimeDTO != nil {
 		//StartCommandWithoutArgs
 		ntsMessage := TelegramCommandMessage{
 			TelegramID: userTelegramID,
 			AnimeInfo: InlineAnime{
-				InternalID:           animeDTO.ID,
-				AnimeName:            animeDTO.EngName,
-				AnimeThumbnailPicURL: animeDTO.ImageURL,
+				InternalID:           userAnimeDTO.ID,
+				AnimeName:            userAnimeDTO.EngName,
+				AnimeThumbnailPicURL: userAnimeDTO.ImageURL,
 			},
 		}
-		if animeDTO.UserHasSubscription {
-			ntsMessage.Type = unsubscribeCommand
+		if userAnimeDTO.UserHasSubscription {
+			ntsMessage.Type = unsubscribeType
 			ntsMessage.AnimeInfo.BottomInlineButton = subscribeButtonText
 		} else {
-			ntsMessage.Type = subscribeCommand
+			ntsMessage.Type = subscribeType
 			ntsMessage.AnimeInfo.BottomInlineButton = unsubscribeButtonText
 		}
 		if err := th.sendNtsMessage(&ntsMessage); err != nil {
@@ -189,7 +184,7 @@ func (th *TelegramHandler) startCommandWithArgument(userTelegramID, internalAnim
 func (th *TelegramHandler) startCommand(userTelegramID int64, existedBefore bool) error {
 	ntsMessage := TelegramCommandMessage{
 		TelegramID: userTelegramID,
-		Type:       startCommand,
+		Type:       startType,
 	}
 	if !existedBefore {
 		ntsMessage.Text = welcomeText
@@ -204,10 +199,10 @@ func (th *TelegramHandler) startCommand(userTelegramID int64, existedBefore bool
 
 func (th *TelegramHandler) inlineQueryCommand(internalUserID int64, update *Update) error {
 	ntsMessage := TelegramCommandMessage{
-		Type:          inlineQueryCommand,
+		Type:          answerQueryType,
 		InlineQueryID: update.InlineQuery.ID,
 	}
-	userAnimes, err := th.adao.ReadUserAnimes(internalUserID)
+	userAnimes, err := th.adao.ReadUserAnimes(internalUserID, update.InlineQuery.Query)
 	if err != nil {
 		return err
 	}
@@ -219,6 +214,7 @@ func (th *TelegramHandler) inlineQueryCommand(internalUserID int64, update *Upda
 			AnimeName:            userAnime.EngName,
 			AnimeThumbnailPicURL: userAnime.ImageURL,
 			BottomInlineButton:   redirectButtonText,
+			UserHasSubscription:  userAnime.UserHasSubscription,
 		})
 	}
 	if err := th.sendNtsMessage(&ntsMessage); err != nil {
@@ -264,7 +260,7 @@ func (th *TelegramHandler) unsubscribeCommand(userID, animeID int64) error {
 func (th *TelegramHandler) defaultCommand(userTelegramID int64) error {
 	nstMessage := TelegramCommandMessage{
 		TelegramID: userTelegramID,
-		Type:       defaultCommand,
+		Type:       defaultType,
 		Text:       unknownCommandText,
 	}
 	if sendNstMessageErr := th.sendNtsMessage(&nstMessage); sendNstMessageErr != nil {
@@ -331,5 +327,6 @@ type InlineAnime struct {
 	InternalID           int64  `json:"id"`
 	AnimeName            string `json:"animeName"`
 	AnimeThumbnailPicURL string `json:"animeThumbNailPicUrl"`
+	UserHasSubscription  bool   `json:"userHasSubscription"`
 	BottomInlineButton   string `json:"bottomInlineButton"`
 }

@@ -29,11 +29,13 @@ type UserAnimeDTO struct {
 	UserHasSubscription bool
 }
 
+const pageSize = 50
+
 const (
 	findAnimeByInternalIDAndByInternalUserIDSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, SS.ANIME_ID FROM ANIMES AS ANS" +
 		" LEFT JOIN SUBSCRIPTIONS AS SS ON (ANS.ID = SS.ANIME_ID AND SS.TELEGRAM_USER_ID = $1) WHERE ANS.ID = $2;"
-	findAllAnimeByInternalUserIDSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, SS.ANIME_ID FROM ANIMES AS ANS" +
-		" LEFT JOIN SUBSCRIPTIONS AS SS ON (ANS.ID = SS.ANIME_ID AND SS.TELEGRAM_USER_ID = $1)"
+	findAllAnimesBySentenceAndInternalUserIDSQL = "SELECT ANS.ID, ANS.EXTERNALID, ANS.RUSNAME, ANS.ENGNAME, ANS.IMAGEURL, ANS.NEXT_EPISODE_AT, ANS.NOTIFICATION_SENT, SS.ANIME_ID FROM ANIMES AS ANS" +
+		" LEFT JOIN SUBSCRIPTIONS AS SS ON (ANS.ID = SS.ANIME_ID AND SS.TELEGRAM_USER_ID = $1) WHERE LOWER(ANS.ENGNAME) LIKE $2 OR LOWER(ANS.RUSNAME) LIKE $2"
 	findUserByInternalIDSQL = "SELECT ID, TELEGRAM_USER_ID, TELEGRAM_USERNAME FROM TELEGRAM_USERS WHERE TELEGRAM_USER_ID = $1"
 	findSubscriptionSQL     = "SELECT TELEGRAM_USER_ID, ANIME_ID FROM SUBSCRIPTIONS WHERE TELEGRAM_USER_ID = $1 AND ANIME_ID = $2"
 	insertUserSQL           = "INSERT INTO TELEGRAM_USERS (TELEGRAM_USER_ID, TELEGRAM_USERNAME) VALUES($1, $2) RETURNING ID"
@@ -64,8 +66,8 @@ func (adao *AnimeDAO) FindByUserIDAndInternalID(internalUserID, internalAnimeID 
 }
 
 //ReadUserAnimes func
-func (adao *AnimeDAO) ReadUserAnimes(internalUserID int64) ([]UserAnimeDTO, error) {
-	return adao.readUserAnimesBySQL(internalUserID, findAllAnimeByInternalUserIDSQL)
+func (adao *AnimeDAO) ReadUserAnimes(internalUserID int64, sentence string) ([]UserAnimeDTO, error) {
+	return adao.readUserAnimesBySQL(internalUserID, sentence, findAllAnimesBySentenceAndInternalUserIDSQL)
 }
 
 func (adao *AnimeDAO) scanAsUserAnime(result *sql.Rows) (*UserAnimeDTO, error) {
@@ -107,18 +109,18 @@ func (adao *AnimeDAO) scanAsUserAnime(result *sql.Rows) (*UserAnimeDTO, error) {
 	return &userAnimeDTO, nil
 }
 
-func (adao *AnimeDAO) readUserAnimesBySQL(internalUserID int64, sqlStr string) ([]UserAnimeDTO, error) {
+func (adao *AnimeDAO) readUserAnimesBySQL(internalUserID int64, sentence string, sqlStr string) ([]UserAnimeDTO, error) {
 	sqlStatement, stmtErr := adao.Db.Prepare(sqlStr)
 	if stmtErr != nil {
 		return nil, errors.WithStack(stmtErr)
 	}
 	defer sqlStatement.Close()
-	result, resErr := sqlStatement.Query(internalUserID)
+	result, resErr := sqlStatement.Query(internalUserID, sentence)
 	if resErr != nil {
 		return nil, errors.WithStack(resErr)
 	}
 	defer result.Close()
-	userAnimes := make([]UserAnimeDTO, 0, 10)
+	userAnimes := make([]UserAnimeDTO, 0, pageSize)
 	for result.Next() {
 		userAnimeDTO, scanErr := adao.scanAsUserAnime(result)
 		if scanErr != nil {
