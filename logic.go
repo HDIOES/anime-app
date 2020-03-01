@@ -42,12 +42,14 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqReader, logReqErr := logRequest(r)
 	if logReqErr != nil {
 		HandleError(logReqErr)
+		return
 	}
 	decoder := json.NewDecoder(reqReader)
 	update := &Update{}
 	decodeErr := decoder.Decode(update)
 	if decodeErr != nil {
 		HandleError(decodeErr)
+		return
 	}
 	isMessage := update.Message != nil
 	isInlineQuery := update.InlineQuery != nil
@@ -62,37 +64,14 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if isCallbackQuery {
 		userDTO, existedBefore, err = th.checkAndSaveUserIfPossible(&update.CallbackQuery.From)
 	}
-	if err != nil {
-		HandleError(err)
-	}
 	if isMessage {
-		parts := strings.SplitN(update.Message.Text, " ", 2)
-		command := parts[0]
-		switch command {
-		case "/start":
-			countOfSubstrings := len(parts)
-			if countOfSubstrings == 1 {
-				if err := th.startCommand(update.Message.From.ID, existedBefore); err != nil {
-					HandleError(err)
-				}
-			} else {
-				internalAnimeID, err := strconv.ParseInt(parts[1], 10, 64)
-				if err != nil {
-					HandleError(errors.WithStack(err))
-				}
-				if err := th.startCommandWithArgument(update.Message.From.ID, internalAnimeID, existedBefore); err != nil {
-					HandleError(err)
-				}
-			}
-		default:
-			if err := th.defaultCommand(update.Message.From.ID); err != nil {
-				HandleError(err)
-			}
+		if strings.HasPrefix(update.Message.Text, "/start") {
+			err = th.startCommand(update.Message.From.ID, existedBefore)
+		} else {
+			err = th.defaultCommand(update.Message.From.ID)
 		}
 	} else if isInlineQuery {
-		if err := th.inlineQueryCommand(userDTO.ID, update); err != nil {
-			HandleError(err)
-		}
+		err = th.inlineQueryCommand(userDTO.ID, update)
 	} else if isCallbackQuery {
 		parts := strings.SplitN(update.CallbackQuery.Data, " ", 2)
 		countOfSubstrings := len(parts)
@@ -100,23 +79,26 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			command := parts[0]
 			internalAnimeID, err := strconv.ParseInt(parts[1], 10, 64)
 			if err != nil {
-				HandleError(errors.WithStack(err))
+				err = errors.WithStack(err)
 			}
 			switch command {
 			case "sub":
 				{
-					if err := th.subscribeCommand(userDTO.ID, internalAnimeID); err != nil {
-						HandleError(err)
-					}
+					err = th.subscribeCommand(userDTO.ID, internalAnimeID)
 				}
 			case "unsub":
 				{
-					if err := th.unsubscribeCommand(userDTO.ID, internalAnimeID); err != nil {
-						HandleError(err)
-					}
+					err = th.unsubscribeCommand(userDTO.ID, internalAnimeID)
+				}
+			default:
+				{
+					err = th.defaultCommand(update.CallbackQuery.From.ID)
 				}
 			}
 		}
+	}
+	if err != nil {
+		HandleError(err)
 	}
 }
 
