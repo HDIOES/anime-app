@@ -13,12 +13,9 @@ import (
 )
 
 const (
-	welcomeText           = "Данный бот предназначен для своевременного уведомления о выходе в эфир эпизодов ваших любимых аниме-сериалов"
-	alertText             = "С возвращением! Ранее вы уже пользовались ботом, все ваши подписки сохранены"
-	unknownCommandText    = "Неизвестная команда"
-	subscribeButtonText   = "Подписаться"
-	unsubscribeButtonText = "Отписаться"
-	redirectButtonText    = "Подробности"
+	welcomeText        = "Данный бот предназначен для своевременного уведомления о выходе в эфир эпизодов ваших любимых аниме-сериалов"
+	alertText          = "С возвращением! Ранее вы уже пользовались ботом, все ваши подписки сохранены"
+	unknownCommandText = "Неизвестная команда"
 )
 
 const (
@@ -66,16 +63,34 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if isMessage {
 		if strings.HasPrefix(update.Message.Text, "/start") {
-			err = th.startCommand(update.Message.From.ID, existedBefore)
+			parts := strings.SplitN(update.Message.Text, " ", 2)
+			switch len(parts) {
+			case 1:
+				{
+					err = th.startCommand(update.Message.From.ID, existedBefore)
+				}
+			case 2:
+				{
+					internalAnimeID, parseErr := strconv.ParseInt(parts[1], 10, 64)
+					if parseErr != nil {
+						err = parseErr
+					} else {
+						err = th.startCommandWithInternalAnimeID(update.Message.From.ID, userDTO.ID, internalAnimeID)
+					}
+				}
+			default:
+				{
+					err = errors.New("Parse error")
+				}
+			}
 		} else {
-			err = th.defaultCommand(update.Message.From.ID)
+			err = errors.New("Parse error")
 		}
 	} else if isInlineQuery {
 		err = th.inlineQueryCommand(userDTO.ID, update)
 	} else if isCallbackQuery {
 		parts := strings.SplitN(update.CallbackQuery.Data, " ", 2)
-		countOfSubstrings := len(parts)
-		if countOfSubstrings == 2 && update.CallbackQuery.Message != nil {
+		if len(parts) == 2 && update.CallbackQuery.Message != nil {
 			command := parts[0]
 			internalAnimeID, parseErr := strconv.ParseInt(parts[1], 10, 64)
 			if parseErr != nil {
@@ -100,7 +115,7 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			default:
 				{
-					err = th.defaultCommand(update.CallbackQuery.From.ID)
+					err = errors.New("Parse error")
 				}
 			}
 		} else {
@@ -155,23 +170,42 @@ func (th *TelegramHandler) startCommand(userTelegramID int64, existedBefore bool
 	return nil
 }
 
-func (th *TelegramHandler) inlineQueryCommand(internalUserID int64, update *Update) error {
+func (th *TelegramHandler) startCommandWithInternalAnimeID(userTelegramID, internalUserID, internalAnimeID int64) error {
 	ntsMessage := TelegramCommandMessage{
-		Type:          answerQueryType,
-		InlineQueryID: update.InlineQuery.ID,
+		TelegramID: userTelegramID,
+		Type:       startType,
 	}
+	userAnimeDto, err := th.adao.FindByUserIDAndInternalID(internalUserID, internalAnimeID)
+	if err != nil {
+		return err
+	}
+	ntsMessage.InlineAnime = &InlineAnime{
+		InternalID:           internalAnimeID,
+		AnimeName:            userAnimeDto.EngName,
+		AnimeThumbnailPicURL: userAnimeDto.ImageURL,
+		UserHasSubscription:  userAnimeDto.UserHasSubscription,
+	}
+	if err := th.sendNtsMessage(&ntsMessage); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (th *TelegramHandler) inlineQueryCommand(internalUserID int64, update *Update) error {
 	userAnimes, err := th.adao.ReadUserAnimes(internalUserID, update.InlineQuery.Query)
 	if err != nil {
 		return err
 	}
-	countOfUserAnimes := len(userAnimes)
-	ntsMessage.InlineAnimes = make([]InlineAnime, countOfUserAnimes)
+	ntsMessage := TelegramCommandMessage{
+		Type:          answerQueryType,
+		InlineQueryID: update.InlineQuery.ID,
+	}
+	ntsMessage.InlineAnimes = make([]InlineAnime, len(userAnimes))
 	for _, userAnime := range userAnimes {
 		ntsMessage.InlineAnimes = append(ntsMessage.InlineAnimes, InlineAnime{
 			InternalID:           userAnime.ID,
 			AnimeName:            userAnime.EngName,
 			AnimeThumbnailPicURL: userAnime.ImageURL,
-			BottomInlineButton:   redirectButtonText,
 			UserHasSubscription:  userAnime.UserHasSubscription,
 		})
 	}
@@ -294,8 +328,9 @@ type Chat struct {
 type TelegramCommandMessage struct {
 	Type string `json:"type"`
 	//fields for notification and /start
-	TelegramID int64  `json:"telegramId"`
-	Text       string `json:"text"`
+	TelegramID  int64        `json:"telegramId"`
+	Text        string       `json:"text"`
+	InlineAnime *InlineAnime `json:"inlineAnime"`
 	//inline query fields
 	InlineQueryID string        `json:"inlineQueryId"`
 	InlineAnimes  []InlineAnime `json:"inlineAnimes"`
@@ -310,5 +345,4 @@ type InlineAnime struct {
 	AnimeName            string `json:"animeName"`
 	AnimeThumbnailPicURL string `json:"animeThumbNailPicUrl"`
 	UserHasSubscription  bool   `json:"userHasSubscription"`
-	BottomInlineButton   string `json:"bottomInlineButton"`
 }

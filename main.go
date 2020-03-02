@@ -74,6 +74,7 @@ func main() {
 		return db, natsConnection, &dao.AnimeDAO{Db: db}, &dao.UserDAO{Db: db}, &dao.SubscriptionDAO{Db: db}
 	})
 	container.Invoke(func(settings *Settings, natsConnection *nats.Conn, adao *dao.AnimeDAO, udao *dao.UserDAO, sdao *dao.SubscriptionDAO) {
+		defer natsConnection.Close()
 		handler := &TelegramHandler{
 			udao:           udao,
 			sdao:           sdao,
@@ -81,12 +82,6 @@ func main() {
 			natsConnection: natsConnection,
 			settings:       settings,
 		}
-		/*notification := Notification{
-			Type: "setWebhookNotification",
-		}
-		if err := handler.sendNotification(notification); err != nil {
-			log.Panicln(err)
-		}*/
 		srv := &http.Server{Addr: ":" + strconv.Itoa(settings.ApplicationPort), Handler: handler}
 		log.Fatal(srv.ListenAndServe())
 	})
