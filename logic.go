@@ -75,26 +75,36 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if isCallbackQuery {
 		parts := strings.SplitN(update.CallbackQuery.Data, " ", 2)
 		countOfSubstrings := len(parts)
-		if countOfSubstrings == 2 {
+		if countOfSubstrings == 2 && update.CallbackQuery.Message != nil {
 			command := parts[0]
-			internalAnimeID, err := strconv.ParseInt(parts[1], 10, 64)
-			if err != nil {
-				err = errors.WithStack(err)
+			internalAnimeID, parseErr := strconv.ParseInt(parts[1], 10, 64)
+			if parseErr != nil {
+				err = errors.WithStack(parseErr)
 			}
 			switch command {
 			case "sub":
 				{
-					err = th.subscribeCommand(userDTO.ID, internalAnimeID)
+					err = th.subscribeCommand(
+						userDTO.ID,
+						internalAnimeID,
+						update.CallbackQuery.Message.Chat.ID,
+						update.CallbackQuery.Message.MessageID)
 				}
 			case "unsub":
 				{
-					err = th.unsubscribeCommand(userDTO.ID, internalAnimeID)
+					err = th.unsubscribeCommand(
+						userDTO.ID,
+						internalAnimeID,
+						update.CallbackQuery.Message.Chat.ID,
+						update.CallbackQuery.Message.MessageID)
 				}
 			default:
 				{
 					err = th.defaultCommand(update.CallbackQuery.From.ID)
 				}
 			}
+		} else {
+			err = errors.New("Parse error")
 		}
 	}
 	if err != nil {
@@ -125,40 +135,6 @@ func (th *TelegramHandler) sendNtsMessage(ntsMessage *TelegramCommandMessage) er
 	}
 	if publishErr := th.natsConnection.Publish(th.settings.NatsSubject, data); publishErr != nil {
 		return errors.WithStack(publishErr)
-	}
-	return nil
-}
-
-func (th *TelegramHandler) startCommandWithArgument(userTelegramID, internalAnimeID int64, existedBefore bool) error {
-	userAnimeDTO, err := th.adao.FindByUserIDAndInternalID(userTelegramID, internalAnimeID)
-	if err != nil {
-		return err
-	}
-	if userAnimeDTO != nil {
-		//StartCommandWithoutArgs
-		ntsMessage := TelegramCommandMessage{
-			TelegramID: userTelegramID,
-			AnimeInfo: InlineAnime{
-				InternalID:           userAnimeDTO.ID,
-				AnimeName:            userAnimeDTO.EngName,
-				AnimeThumbnailPicURL: userAnimeDTO.ImageURL,
-			},
-		}
-		if userAnimeDTO.UserHasSubscription {
-			ntsMessage.Type = unsubscribeType
-			ntsMessage.AnimeInfo.BottomInlineButton = subscribeButtonText
-		} else {
-			ntsMessage.Type = subscribeType
-			ntsMessage.AnimeInfo.BottomInlineButton = unsubscribeButtonText
-		}
-		if err := th.sendNtsMessage(&ntsMessage); err != nil {
-			return err
-		}
-	} else {
-		//DefaultCommand
-		if err := th.defaultCommand(userTelegramID); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -205,34 +181,50 @@ func (th *TelegramHandler) inlineQueryCommand(internalUserID int64, update *Upda
 	return nil
 }
 
-func (th *TelegramHandler) subscribeCommand(userID, animeID int64) error {
-	found, err := th.sdao.Find(userID, animeID)
+func (th *TelegramHandler) subscribeCommand(internalUserID, internalAnimeID int64, chatID, messageID int64) error {
+	found, err := th.sdao.Find(internalUserID, internalAnimeID)
 	if err != nil {
 		return err
 	}
 	if found {
-		if err := th.defaultCommand(userID); err != nil {
+		if err := th.defaultCommand(internalUserID); err != nil {
 			return err
 		}
 	} else {
-		if err := th.sdao.Insert(userID, animeID); err != nil {
+		if err := th.sdao.Insert(internalUserID, internalAnimeID); err != nil {
+			return err
+		}
+		ntsMessage := TelegramCommandMessage{
+			Type:      subscribeType,
+			ChatID:    chatID,
+			MessageID: messageID,
+		}
+		if err := th.sendNtsMessage(&ntsMessage); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (th *TelegramHandler) unsubscribeCommand(userID, animeID int64) error {
-	found, err := th.sdao.Find(userID, animeID)
+func (th *TelegramHandler) unsubscribeCommand(internalUserID, internalAnimeID, chatID, messageID int64) error {
+	found, err := th.sdao.Find(internalUserID, internalAnimeID)
 	if err != nil {
 		return err
 	}
 	if found {
-		if err := th.sdao.Delete(userID, animeID); err != nil {
+		if err := th.sdao.Delete(internalUserID, internalAnimeID); err != nil {
+			return err
+		}
+		ntsMessage := TelegramCommandMessage{
+			Type:      unsubscribeType,
+			ChatID:    chatID,
+			MessageID: messageID,
+		}
+		if err := th.sendNtsMessage(&ntsMessage); err != nil {
 			return err
 		}
 	} else {
-		if err := th.defaultCommand(userID); err != nil {
+		if err := th.defaultCommand(internalAnimeID); err != nil {
 			return err
 		}
 	}
@@ -264,6 +256,7 @@ type Message struct {
 	MessageID int64  `json:"message_id"`
 	From      User   `json:"from"`
 	Text      string `json:"text"`
+	Chat      Chat   `json:"chat"`
 }
 
 //InlineQuery struct
@@ -276,9 +269,10 @@ type InlineQuery struct {
 
 //CallbackQuery struct
 type CallbackQuery struct {
-	ID   string `json:"id"`
-	From User   `json:"from"`
-	Data string `json:"data"`
+	ID      string   `json:"id"`
+	From    User     `json:"from"`
+	Data    string   `json:"data"`
+	Message *Message `json:"message"`
 }
 
 //User struct
@@ -291,17 +285,23 @@ type User struct {
 	LanguageCode string `json:"language_code"`
 }
 
+//Chat struct
+type Chat struct {
+	ID int64 `json:"id"`
+}
+
 //TelegramCommandMessage struct
 type TelegramCommandMessage struct {
 	Type string `json:"type"`
-	//fields for notification and /start without arguments
+	//fields for notification and /start
 	TelegramID int64  `json:"telegramId"`
 	Text       string `json:"text"`
 	//inline query fields
 	InlineQueryID string        `json:"inlineQueryId"`
 	InlineAnimes  []InlineAnime `json:"inlineAnimes"`
-	//fields for anime information after typing '/start shikimoriId' in private chat
-	AnimeInfo InlineAnime `json:"animeInfo"`
+	//fields for subscribe/unsubscribe action
+	ChatID    int64 `json:"chatId"`
+	MessageID int64 `json:"messageId"`
 }
 
 //InlineAnime struct
