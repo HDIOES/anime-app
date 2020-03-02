@@ -229,9 +229,10 @@ func (th *TelegramHandler) subscribeCommand(internalUserID, internalAnimeID int6
 			return err
 		}
 		ntsMessage := TelegramCommandMessage{
-			Type:      subscribeType,
-			ChatID:    chatID,
-			MessageID: messageID,
+			Type:            subscribeType,
+			ChatID:          chatID,
+			MessageID:       messageID,
+			InternalAnimeID: internalAnimeID,
 		}
 		if err := th.sendNtsMessage(&ntsMessage); err != nil {
 			return err
@@ -250,9 +251,10 @@ func (th *TelegramHandler) unsubscribeCommand(internalUserID, internalAnimeID, c
 			return err
 		}
 		ntsMessage := TelegramCommandMessage{
-			Type:      unsubscribeType,
-			ChatID:    chatID,
-			MessageID: messageID,
+			Type:            unsubscribeType,
+			ChatID:          chatID,
+			MessageID:       messageID,
+			InternalAnimeID: internalAnimeID,
 		}
 		if err := th.sendNtsMessage(&ntsMessage); err != nil {
 			return err
@@ -335,8 +337,10 @@ type TelegramCommandMessage struct {
 	InlineQueryID string        `json:"inlineQueryId"`
 	InlineAnimes  []InlineAnime `json:"inlineAnimes"`
 	//fields for subscribe/unsubscribe action
-	ChatID    int64 `json:"chatId"`
-	MessageID int64 `json:"messageId"`
+	ChatID          int64  `json:"chatId"`
+	MessageID       int64  `json:"messageId"`
+	CallbackQueryID string `json:"callback_query_id"`
+	InternalAnimeID int64  `json:"internal_anime_id"`
 }
 
 //InlineAnime struct
