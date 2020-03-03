@@ -182,7 +182,7 @@ func (th *TelegramHandler) startCommandWithInternalAnimeID(userTelegramID, inter
 	ntsMessage.InlineAnime = &InlineAnime{
 		InternalID:           internalAnimeID,
 		AnimeName:            userAnimeDto.EngName,
-		AnimeThumbnailPicURL: userAnimeDto.ImageURL,
+		AnimeThumbnailPicURL: th.settings.ShikimoriURL + userAnimeDto.ImageURL,
 		UserHasSubscription:  userAnimeDto.UserHasSubscription,
 	}
 	if err := th.sendNtsMessage(&ntsMessage); err != nil {
