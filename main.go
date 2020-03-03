@@ -27,6 +27,7 @@ const (
 	migrationPathEnvName             = "DATABASE_MIGRATION_PATH"
 	natsURLEnvName                   = "NATS_URL"
 	natsSubjectEnvName               = "NATS_SUBJECT"
+	shikimoriURLEnvName              = "SHIKIMORI_URL"
 )
 
 func main() {
@@ -128,6 +129,9 @@ func setSettingsFromEnv(settings *Settings) {
 	if value := os.Getenv(natsSubjectEnvName); value != "" {
 		settings.NatsSubject = value
 	}
+	if value := os.Getenv(shikimoriURLEnvName); value != "" {
+		settings.ShikimoriURL = value
+	}
 }
 
 //Settings mapping object for settings.json
@@ -140,6 +144,7 @@ type Settings struct {
 	MigrationPath      string `json:"migrationPath"`
 	NatsURL            string `json:"natsUrl"`
 	NatsSubject        string `json:"natsSubject"`
+	ShikimoriURL       string `json:"shikimoriUrl"`
 }
 
 //StackTracer struct

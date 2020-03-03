@@ -205,7 +205,7 @@ func (th *TelegramHandler) inlineQueryCommand(internalUserID int64, update *Upda
 		ntsMessage.InlineAnimes = append(ntsMessage.InlineAnimes, InlineAnime{
 			InternalID:           userAnime.ID,
 			AnimeName:            userAnime.EngName,
-			AnimeThumbnailPicURL: userAnime.ImageURL,
+			AnimeThumbnailPicURL: th.settings.ShikimoriURL + userAnime.ImageURL,
 			UserHasSubscription:  userAnime.UserHasSubscription,
 		})
 	}
