@@ -200,7 +200,7 @@ func (th *TelegramHandler) inlineQueryCommand(internalUserID int64, update *Upda
 		Type:          answerQueryType,
 		InlineQueryID: update.InlineQuery.ID,
 	}
-	ntsMessage.InlineAnimes = make([]InlineAnime, len(userAnimes))
+	ntsMessage.InlineAnimes = make([]InlineAnime, 0, len(userAnimes))
 	for _, userAnime := range userAnimes {
 		ntsMessage.InlineAnimes = append(ntsMessage.InlineAnimes, InlineAnime{
 			InternalID:           userAnime.ID,
