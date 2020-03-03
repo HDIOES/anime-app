@@ -72,14 +72,14 @@ func (adao *AnimeDAO) ReadUserAnimes(internalUserID int64, sentence string) ([]U
 }
 
 func (adao *AnimeDAO) scanAsUserAnime(result *sql.Rows) (*UserAnimeDTO, error) {
-	var ID *sql.NullInt64
-	var externalID *sql.NullString
-	var rusname *sql.NullString
-	var engname *sql.NullString
-	var imageURL *sql.NullString
-	var nextEpisodeAt *PqTime
-	var notificationSent *sql.NullBool
-	var userID *sql.NullInt64
+	var ID sql.NullInt64
+	var externalID sql.NullString
+	var rusname sql.NullString
+	var engname sql.NullString
+	var imageURL sql.NullString
+	var nextEpisodeAt PqTime
+	var notificationSent sql.NullBool
+	var userID sql.NullInt64
 	scanErr := result.Scan(&ID, &externalID, &rusname, &engname, &imageURL, &nextEpisodeAt, &notificationSent, &userID)
 	if scanErr != nil {
 		return nil, errors.WithStack(scanErr)
@@ -167,9 +167,9 @@ func (udao *UserDAO) Find(telegramID string) (*UserDTO, error) {
 }
 
 func (udao *UserDAO) scanAsUser(result *sql.Rows) (*UserDTO, error) {
-	var id *sql.NullInt64
-	var telegramID *sql.NullString
-	var telegramUsername *sql.NullString
+	var id sql.NullInt64
+	var telegramID sql.NullString
+	var telegramUsername sql.NullString
 	scanErr := result.Scan(&id, &telegramID, &telegramUsername)
 	if scanErr != nil {
 		return nil, errors.WithStack(scanErr)
@@ -222,7 +222,7 @@ func (udao *UserDAO) insert(tx *sql.Tx, externalID string, username string) (*Us
 		TelegramUsername: username,
 	}
 	if result.Next() {
-		var ID *sql.NullInt64
+		var ID sql.NullInt64
 		if err := result.Scan(&ID); err != nil {
 			return nil, errors.WithStack(err)
 		}
