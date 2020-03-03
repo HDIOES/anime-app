@@ -27,6 +27,7 @@ const (
 	migrationPathEnvName             = "DATABASE_MIGRATION_PATH"
 	natsURLEnvName                   = "NATS_URL"
 	natsSubjectEnvName               = "NATS_SUBJECT"
+	shikimoriURLEnvName              = "SHIKIMORI_URL"
 )
 
 func main() {
@@ -74,6 +75,7 @@ func main() {
 		return db, natsConnection, &dao.AnimeDAO{Db: db}, &dao.UserDAO{Db: db}, &dao.SubscriptionDAO{Db: db}
 	})
 	container.Invoke(func(settings *Settings, natsConnection *nats.Conn, adao *dao.AnimeDAO, udao *dao.UserDAO, sdao *dao.SubscriptionDAO) {
+		defer natsConnection.Close()
 		handler := &TelegramHandler{
 			udao:           udao,
 			sdao:           sdao,
@@ -81,12 +83,6 @@ func main() {
 			natsConnection: natsConnection,
 			settings:       settings,
 		}
-		/*notification := Notification{
-			Type: "setWebhookNotification",
-		}
-		if err := handler.sendNotification(notification); err != nil {
-			log.Panicln(err)
-		}*/
 		srv := &http.Server{Addr: ":" + strconv.Itoa(settings.ApplicationPort), Handler: handler}
 		log.Fatal(srv.ListenAndServe())
 	})
@@ -133,6 +129,9 @@ func setSettingsFromEnv(settings *Settings) {
 	if value := os.Getenv(natsSubjectEnvName); value != "" {
 		settings.NatsSubject = value
 	}
+	if value := os.Getenv(shikimoriURLEnvName); value != "" {
+		settings.ShikimoriURL = value
+	}
 }
 
 //Settings mapping object for settings.json
@@ -145,6 +144,7 @@ type Settings struct {
 	MigrationPath      string `json:"migrationPath"`
 	NatsURL            string `json:"natsUrl"`
 	NatsSubject        string `json:"natsSubject"`
+	ShikimoriURL       string `json:"shikimoriUrl"`
 }
 
 //StackTracer struct
