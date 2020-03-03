@@ -103,7 +103,8 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						userDTO.ID,
 						internalAnimeID,
 						update.CallbackQuery.Message.Chat.ID,
-						update.CallbackQuery.Message.MessageID)
+						update.CallbackQuery.Message.MessageID,
+						update.CallbackQuery.ID)
 				}
 			case "unsub":
 				{
@@ -111,7 +112,8 @@ func (th *TelegramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						userDTO.ID,
 						internalAnimeID,
 						update.CallbackQuery.Message.Chat.ID,
-						update.CallbackQuery.Message.MessageID)
+						update.CallbackQuery.Message.MessageID,
+						update.CallbackQuery.ID)
 				}
 			default:
 				{
