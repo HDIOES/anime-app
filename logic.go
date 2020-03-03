@@ -215,7 +215,7 @@ func (th *TelegramHandler) inlineQueryCommand(internalUserID int64, update *Upda
 	return nil
 }
 
-func (th *TelegramHandler) subscribeCommand(internalUserID, internalAnimeID int64, chatID, messageID int64) error {
+func (th *TelegramHandler) subscribeCommand(internalUserID, internalAnimeID int64, chatID, messageID int64, callbackQueryID string) error {
 	found, err := th.sdao.Find(internalUserID, internalAnimeID)
 	if err != nil {
 		return err
@@ -233,6 +233,7 @@ func (th *TelegramHandler) subscribeCommand(internalUserID, internalAnimeID int6
 			ChatID:          chatID,
 			MessageID:       messageID,
 			InternalAnimeID: internalAnimeID,
+			CallbackQueryID: callbackQueryID,
 		}
 		if err := th.sendNtsMessage(&ntsMessage); err != nil {
 			return err
@@ -241,7 +242,7 @@ func (th *TelegramHandler) subscribeCommand(internalUserID, internalAnimeID int6
 	return nil
 }
 
-func (th *TelegramHandler) unsubscribeCommand(internalUserID, internalAnimeID, chatID, messageID int64) error {
+func (th *TelegramHandler) unsubscribeCommand(internalUserID, internalAnimeID, chatID, messageID int64, callbackQueryID string) error {
 	found, err := th.sdao.Find(internalUserID, internalAnimeID)
 	if err != nil {
 		return err
@@ -255,6 +256,7 @@ func (th *TelegramHandler) unsubscribeCommand(internalUserID, internalAnimeID, c
 			ChatID:          chatID,
 			MessageID:       messageID,
 			InternalAnimeID: internalAnimeID,
+			CallbackQueryID: callbackQueryID,
 		}
 		if err := th.sendNtsMessage(&ntsMessage); err != nil {
 			return err
